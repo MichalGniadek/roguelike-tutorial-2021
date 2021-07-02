@@ -1,25 +1,60 @@
-use bevy::prelude::*;
+mod world_generation;
+use bevy::{prelude::*, render::camera::Camera};
+use world_generation::{Tile, World};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AppState {
+    WorldGeneration,
+    Play,
+}
 
 fn main() {
     App::build()
+        // Setup
         .insert_resource(ClearColor(Color::hex("171717").unwrap()))
         .add_plugins(DefaultPlugins)
         .add_system(bevy::input::system::exit_on_esc_system.system())
         .insert_resource(Grid {
             cell_size: IVec2::new(512, 512),
         })
+        // Setup camera
         .add_startup_system(
-            // Setup camera
             (|mut commands: Commands| {
                 let mut orto = OrthographicCameraBundle::new_2d();
                 orto.orthographic_projection.scale = 8.0;
-                commands.spawn_bundle(orto);
+                commands
+                    .spawn_bundle(orto)
+                    .insert(GridPosition { x: 0, y: 0 });
             })
             .system(),
         )
-        .add_startup_system(generate_world.system())
-        .add_system(player_control.system())
-        .add_system(update_position.system())
+        // World generation
+        .add_state(AppState::WorldGeneration)
+        .add_system_set(
+            SystemSet::on_enter(AppState::WorldGeneration)
+                .with_system(world_generation::start_world_generation.system()),
+        )
+        .add_system_set(
+            SystemSet::on_update(AppState::WorldGeneration)
+                .with_system(world_generation::drunkard_walk.system()),
+        )
+        .add_system_set(
+            SystemSet::on_exit(AppState::WorldGeneration)
+                .with_system(world_generation::finish_world_generation.system()),
+        )
+        // Play
+        .add_system_set(SystemSet::on_enter(AppState::Play).with_system(spawn_player.system()))
+        .add_system_set(
+            SystemSet::on_update(AppState::Play)
+                .label("display")
+                .with_system(camera_position.system().label("camera"))
+                .with_system(update_position.system().after("camera")),
+        )
+        .add_system_set(
+            SystemSet::on_update(AppState::Play)
+                .after("display")
+                .with_system(player_control.system()),
+        )
         .run();
 }
 
@@ -34,64 +69,11 @@ struct GridPosition {
     y: i32,
 }
 
-struct Tile {
-    walkable: bool,
-}
-
-struct World {
-    world_size: IVec2,
-    tiles: Vec<Vec<Entity>>,
-}
-
-fn generate_world(
+fn spawn_player(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    let wall_material = materials.add(ColorMaterial {
-        texture: Some(asset_server.load("brick-wall.png")),
-        color: Color::hex("444444").unwrap(),
-    });
-
-    let floor_material = materials.add(ColorMaterial {
-        texture: Some(asset_server.load("square.png")),
-        color: Color::hex("444444").unwrap(),
-    });
-
-    let world_size = IVec2::new(10, 10);
-    let mut tiles = vec![];
-    for x in 0..world_size.x {
-        let mut column = vec![];
-        for y in 0..world_size.y {
-            if x == 0 || x == world_size.x - 1 || y == 0 || y == world_size.y - 1 {
-                column.push(
-                    commands
-                        .spawn_bundle(SpriteBundle {
-                            material: wall_material.clone(),
-                            ..Default::default()
-                        })
-                        .insert(GridPosition { x, y })
-                        .insert(Tile { walkable: false })
-                        .id(),
-                );
-            } else {
-                column.push(
-                    commands
-                        .spawn_bundle(SpriteBundle {
-                            material: floor_material.clone(),
-                            ..Default::default()
-                        })
-                        .insert(GridPosition { x, y })
-                        .insert(Tile { walkable: true })
-                        .id(),
-                );
-            }
-        }
-        tiles.push(column);
-    }
-
-    commands.insert_resource(World { world_size, tiles });
-
     commands
         .spawn_bundle(SpriteBundle {
             material: materials.add(ColorMaterial {
@@ -103,7 +85,7 @@ fn generate_world(
         })
         .insert(Player)
         .insert(Initiative)
-        .insert(GridPosition { x: 4, y: 4 });
+        .insert(GridPosition { x: 10, y: 10 });
 
     commands
         .spawn_bundle(SpriteBundle {
@@ -147,9 +129,20 @@ fn player_control(
         _ => {}
     }
 
-    let tile = world.tiles[new_pos.x as usize][new_pos.y as usize];
+    let tile = world.tiles[new_pos.x as usize][new_pos.y as usize].unwrap();
     let tile = tile_query.get(tile).unwrap();
     if tile.walkable {
         *position = new_pos;
     }
+}
+
+fn camera_position(
+    mut query: QuerySet<(
+        Query<&GridPosition, With<Player>>,
+        Query<&mut GridPosition, With<Camera>>,
+    )>,
+) {
+    let position = query.q0_mut().single_mut().unwrap().clone();
+    let mut camera = query.q1_mut().single_mut().unwrap();
+    *camera = position;
 }
