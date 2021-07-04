@@ -55,6 +55,11 @@ fn main() {
                 .after("display")
                 .with_system(player_control.system()),
         )
+        .add_system_set(
+            SystemSet::on_exit(AppState::Play)
+                .after("display")
+                .with_system(cleanup_play.system()),
+        )
         .run();
 }
 
@@ -110,16 +115,16 @@ fn spawn_player(
             },
         ));
 
-    commands
-        .spawn_bundle(SpriteBundle {
-            material: materials.add(ColorMaterial {
-                texture: Some(asset_server.load("orc-head.png")),
-                color: Color::hex("DA0037").unwrap(),
-            }),
-            transform: Transform::from_xyz(0.0, 0.0, 1.0),
-            ..Default::default()
-        })
-        .insert(GridPosition { x: 7, y: 7 });
+    // commands
+    //     .spawn_bundle(SpriteBundle {
+    //         material: materials.add(ColorMaterial {
+    //             texture: Some(asset_server.load("orc-head.png")),
+    //             color: Color::hex("DA0037").unwrap(),
+    //         }),
+    //         transform: Transform::from_xyz(0.0, 0.0, 1.0),
+    //         ..Default::default()
+    //     })
+    //     .insert(GridPosition { x: 7, y: 7 });
 }
 
 fn update_position(
@@ -140,6 +145,7 @@ fn player_control(
     tile_query: Query<&Tile>,
     world: Res<World>,
     keys: Res<Input<KeyCode>>,
+    mut temp_app_state: ResMut<State<AppState>>,
 ) {
     let mut position = query.single_mut().unwrap();
     let mut new_pos = position.clone();
@@ -149,6 +155,7 @@ fn player_control(
         Some(KeyCode::Down | KeyCode::S) => new_pos.y -= 1,
         Some(KeyCode::Left | KeyCode::A) => new_pos.x -= 1,
         Some(KeyCode::Right | KeyCode::D) => new_pos.x += 1,
+        Some(KeyCode::R) => temp_app_state.set(AppState::WorldGeneration).unwrap(),
         _ => {}
     }
 
@@ -168,4 +175,20 @@ fn camera_position(
     let position = query.q0_mut().single_mut().unwrap().clone();
     let mut camera = query.q1_mut().single_mut().unwrap();
     *camera = position;
+}
+
+fn cleanup_play(
+    tile_query: Query<(Entity, &Tile)>,
+    player_query: Query<(Entity, &Player)>,
+    mut commands: Commands,
+) {
+    for (e, _) in tile_query.iter() {
+        commands.entity(e).despawn();
+    }
+
+    for (e, _) in player_query.iter() {
+        commands.entity(e).despawn();
+    }
+
+    commands.remove_resource::<World>();
 }
