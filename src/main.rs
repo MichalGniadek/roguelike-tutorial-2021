@@ -1,5 +1,5 @@
 mod world_generation;
-use bevy::{prelude::*, render::camera::Camera};
+use bevy::{math::ivec2, prelude::*, render::camera::Camera};
 use world_generation::{Tile, World};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -73,7 +73,25 @@ fn spawn_player(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    world: Res<World>,
+    tile_query: Query<&Tile>,
 ) {
+    // world.tiles.iter().flatten().filter_map(|e| e.map(|e| tile_query.get(e).))
+    let mut player_pos = ivec2(0, 0);
+    'finished: for x in 0..world.world_size.x {
+        for y in 0..world.world_size.y {
+            match world.tiles[x as usize][y as usize] {
+                Some(e) => {
+                    if tile_query.get(e).unwrap().walkable {
+                        player_pos = ivec2(x, y);
+                        break 'finished;
+                    }
+                }
+                None => continue,
+            }
+        }
+    }
+
     commands
         .spawn_bundle(SpriteBundle {
             material: materials.add(ColorMaterial {
@@ -83,9 +101,14 @@ fn spawn_player(
             transform: Transform::from_xyz(0.0, 0.0, 1.0),
             ..Default::default()
         })
-        .insert(Player)
-        .insert(Initiative)
-        .insert(GridPosition { x: 10, y: 10 });
+        .insert_bundle((
+            Player,
+            Initiative,
+            GridPosition {
+                x: player_pos.x,
+                y: player_pos.y,
+            },
+        ));
 
     commands
         .spawn_bundle(SpriteBundle {

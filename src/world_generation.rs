@@ -112,19 +112,19 @@ pub struct Drunkard {
 
 pub fn start_world_generation(mut commands: Commands) {
     commands.insert_resource(WorldGeneration {
-        tiles: vec![vec![false; 100]; 100],
+        tiles: vec![vec![false; 200]; 200],
         bounds: (ivec2(i32::MAX, i32::MAX), ivec2(i32::MIN, i32::MIN)),
         floor_number: 0,
     });
 
     commands.spawn().insert(Drunkard {
-        position: ivec2(50, 50),
+        position: ivec2(100, 100),
         direction: 0,
         direction_change_chance: 0.50,
-        life: Life::Time(5),
+        life: Life::Floors(500),
 
-        spawn_chance: 1.0,
-        spawn_life: Life::Floors(250),
+        spawn_chance: 0.1,
+        spawn_life: Life::Floors(800),
     });
 }
 
@@ -233,5 +233,6 @@ pub fn finish_world_generation(
         tiles.push(column);
     }
 
+    commands.remove_resource::<WorldGeneration>();
     commands.insert_resource(World { world_size, tiles });
 }
