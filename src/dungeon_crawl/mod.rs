@@ -121,15 +121,19 @@ fn player_control(
     let mut position = query.single_mut().unwrap();
     let mut new_pos = position.clone();
 
-    match keys.get_just_pressed().next() {
-        Some(KeyCode::Up | KeyCode::W) => new_pos.y += 1,
-        Some(KeyCode::Down | KeyCode::S) => new_pos.y -= 1,
-        Some(KeyCode::Left | KeyCode::A) => new_pos.x -= 1,
-        Some(KeyCode::Right | KeyCode::D) => new_pos.x += 1,
-        Some(KeyCode::R) => temp_app_state
-            .set(AppState::WorldGeneration(WorldGeneratorType::Drunkard))
-            .unwrap(),
-        _ => {}
+    if keys.is_changed() {
+        match keys.get_just_pressed().next() {
+            Some(KeyCode::Up | KeyCode::W) => new_pos.y += 1,
+            Some(KeyCode::Down | KeyCode::S) => new_pos.y -= 1,
+            Some(KeyCode::Left | KeyCode::A) => new_pos.x -= 1,
+            Some(KeyCode::Right | KeyCode::D) => new_pos.x += 1,
+            Some(KeyCode::R) => temp_app_state
+                .set(AppState::WorldGeneration(
+                    WorldGeneratorType::CellularAutomata,
+                ))
+                .unwrap(),
+            _ => {}
+        }
     }
 
     let tile = world.tiles[new_pos.x as usize][new_pos.y as usize].unwrap();
@@ -163,5 +167,5 @@ fn cleanup_play(
         commands.entity(e).despawn();
     }
 
-    commands.remove_resource::<World>();
+    commands.remove_resource::<WorldMap>();
 }

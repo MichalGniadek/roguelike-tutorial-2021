@@ -18,6 +18,6 @@ fn main() {
         .add_system(bevy::input::system::exit_on_esc_system.system())
         .add_plugin(dungeon_crawl::DungeonCrawlPlugin)
         .add_plugins(world_generation::WorldGenerationPlugins)
-        .add_state(AppState::WorldGeneration(WorldGeneratorType::Drunkard))
+        .add_state(AppState::WorldGeneration(WorldGeneratorType::CellularAutomata))
         .run();
 }
