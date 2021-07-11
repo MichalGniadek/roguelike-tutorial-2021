@@ -1,55 +1,8 @@
-use crate::{AppState, GridPosition};
+use crate::world_map::{TileFactory, WorldMap};
+use crate::AppState;
 use bevy::{math::ivec2, prelude::*};
 use rand::random;
 use std::cmp::{max, min};
-
-pub struct Tile {
-    pub walkable: bool,
-}
-
-pub struct World {
-    pub world_size: IVec2,
-    pub tiles: Vec<Vec<Option<Entity>>>,
-}
-
-// Generation
-
-#[derive(Bundle)]
-struct TileBundle {
-    #[bundle]
-    sprite: SpriteBundle,
-    position: GridPosition,
-    tile: Tile,
-}
-
-struct TileFactory {
-    wall_material: Handle<ColorMaterial>,
-    floor_material: Handle<ColorMaterial>,
-}
-
-impl TileFactory {
-    fn wall(&self, x: i32, y: i32) -> TileBundle {
-        TileBundle {
-            sprite: SpriteBundle {
-                material: self.wall_material.clone(),
-                ..Default::default()
-            },
-            position: GridPosition { x, y },
-            tile: Tile { walkable: false },
-        }
-    }
-
-    fn floor(&self, x: i32, y: i32) -> TileBundle {
-        TileBundle {
-            sprite: SpriteBundle {
-                material: self.floor_material.clone(),
-                ..Default::default()
-            },
-            position: GridPosition { x, y },
-            tile: Tile { walkable: true },
-        }
-    }
-}
 
 pub struct WorldGeneration {
     pub tiles: Vec<Vec<bool>>,
@@ -194,16 +147,7 @@ pub fn finish_world_generation(
 
     let world_size = world.bounds.1 - world.bounds.0;
 
-    let tile_factory = TileFactory {
-        wall_material: materials.add(ColorMaterial {
-            texture: Some(asset_server.load("brick-wall.png")),
-            color: Color::hex("444444").unwrap(),
-        }),
-        floor_material: materials.add(ColorMaterial {
-            texture: Some(asset_server.load("square.png")),
-            color: Color::hex("444444").unwrap(),
-        }),
-    };
+    let tile_factory = TileFactory::new(&asset_server, &mut materials);
 
     let mut tiles = vec![];
     for x in 0..world_size.x {
@@ -234,5 +178,9 @@ pub fn finish_world_generation(
     }
 
     commands.remove_resource::<WorldGeneration>();
-    commands.insert_resource(World { world_size, tiles });
+    commands.insert_resource(WorldMap {
+        world_size,
+        tiles,
+        tile_factory,
+    });
 }

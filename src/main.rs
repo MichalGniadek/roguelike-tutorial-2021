@@ -1,6 +1,7 @@
 mod world_generation;
+mod world_map;
 use bevy::{math::ivec2, prelude::*, render::camera::Camera};
-use world_generation::{Tile, World};
+use world_map::{Tile, WorldMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AppState {
@@ -78,10 +79,9 @@ fn spawn_player(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    world: Res<World>,
+    world: Res<WorldMap>,
     tile_query: Query<&Tile>,
 ) {
-    // world.tiles.iter().flatten().filter_map(|e| e.map(|e| tile_query.get(e).))
     let mut player_pos = ivec2(0, 0);
     'finished: for x in 0..world.world_size.x {
         for y in 0..world.world_size.y {
@@ -130,7 +130,7 @@ fn spawn_player(
 fn update_position(
     mut query: Query<(&mut Transform, &GridPosition), Changed<GridPosition>>,
     grid: Res<Grid>,
-    world: Res<World>,
+    world: Res<WorldMap>,
 ) {
     let offset_x = (world.world_size.x as f32 - 1.0) * (grid.cell_size.x as f32) / 2.0;
     let offset_y = (world.world_size.y as f32 - 1.0) * (grid.cell_size.y as f32) / 2.0;
@@ -143,7 +143,7 @@ fn update_position(
 fn player_control(
     mut query: Query<&mut GridPosition, (With<Player>, With<Initiative>)>,
     tile_query: Query<&Tile>,
-    world: Res<World>,
+    world: Res<WorldMap>,
     keys: Res<Input<KeyCode>>,
     mut temp_app_state: ResMut<State<AppState>>,
 ) {
