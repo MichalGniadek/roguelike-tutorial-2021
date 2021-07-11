@@ -1,16 +1,35 @@
+use super::WorldGeneratorType;
 use crate::world_map::{TileFactory, WorldMap};
 use crate::AppState;
 use bevy::{math::ivec2, prelude::*};
 use rand::random;
 use std::cmp::{max, min};
 
-pub struct WorldGeneration {
+pub struct DrunkardPlugin;
+impl Plugin for DrunkardPlugin {
+    fn build(&self, app: &mut AppBuilder) {
+        app.add_system_set(
+            SystemSet::on_enter(AppState::WorldGeneration(WorldGeneratorType::Drunkard))
+                .with_system(start_drunkard.system()),
+        )
+        .add_system_set(
+            SystemSet::on_update(AppState::WorldGeneration(WorldGeneratorType::Drunkard))
+                .with_system(drunkard_walk.system()),
+        )
+        .add_system_set(
+            SystemSet::on_exit(AppState::WorldGeneration(WorldGeneratorType::Drunkard))
+                .with_system(finish_drunkard.system()),
+        );
+    }
+}
+
+pub struct DrunkardMap {
     pub tiles: Vec<Vec<bool>>,
     pub bounds: (IVec2, IVec2),
     pub floor_number: u32,
 }
 
-impl WorldGeneration {
+impl DrunkardMap {
     pub fn get(&self, pos: IVec2) -> Option<bool> {
         if pos.x > 0
             && (pos.x as usize) < self.tiles.len()
@@ -63,8 +82,8 @@ pub struct Drunkard {
     spawn_life: Life,
 }
 
-pub fn start_world_generation(mut commands: Commands) {
-    commands.insert_resource(WorldGeneration {
+pub fn start_drunkard(mut commands: Commands) {
+    commands.insert_resource(DrunkardMap {
         tiles: vec![vec![false; 200]; 200],
         bounds: (ivec2(i32::MAX, i32::MAX), ivec2(i32::MIN, i32::MIN)),
         floor_number: 0,
@@ -74,16 +93,16 @@ pub fn start_world_generation(mut commands: Commands) {
         position: ivec2(100, 100),
         direction: 0,
         direction_change_chance: 0.50,
-        life: Life::Floors(500),
+        life: Life::Time(200),
 
         spawn_chance: 0.1,
-        spawn_life: Life::Floors(800),
+        spawn_life: Life::Floors(200),
     });
 }
 
 pub fn drunkard_walk(
     mut drunkards: Query<(Entity, &mut Drunkard)>,
-    mut world: ResMut<WorldGeneration>,
+    mut world: ResMut<DrunkardMap>,
     mut commands: Commands,
     mut app_state: ResMut<State<AppState>>,
 ) {
@@ -131,12 +150,12 @@ pub fn drunkard_walk(
     }
 
     if drunkards.iter_mut().len() == 0 {
-        app_state.set(AppState::Play).unwrap();
+        app_state.set(AppState::DungeonCrawl).unwrap();
     }
 }
 
-pub fn finish_world_generation(
-    mut world: ResMut<WorldGeneration>,
+pub fn finish_drunkard(
+    mut world: ResMut<DrunkardMap>,
     asset_server: Res<AssetServer>,
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -177,7 +196,7 @@ pub fn finish_world_generation(
         tiles.push(column);
     }
 
-    commands.remove_resource::<WorldGeneration>();
+    commands.remove_resource::<DrunkardMap>();
     commands.insert_resource(WorldMap {
         world_size,
         tiles,

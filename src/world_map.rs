@@ -1,5 +1,14 @@
-use crate::GridPosition;
 use bevy::prelude::*;
+
+pub struct Grid {
+    pub cell_size: IVec2,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct GridPosition {
+    pub x: i32,
+    pub y: i32,
+}
 
 pub struct Tile {
     pub walkable: bool,
