@@ -3,5 +3,8 @@ This is a repository for a basic roguelike game following [/r/roguelikedev annua
 It's written in Rust with Bevy game engine and I'm using the tutorial as a rough roadmap.
 
 ## Running
+You can play it browser [here](https://michalgniadek.github.io/roguelike-tutorial-2021/)!
+
+## Building
 Requires Rust and cargo make (can be installed using `cargo install cargo-make`).
 Use `cargo make run` to run a desktop version and `cargo make serve` to build web version and start a local web server (the second command will also install a few additional dependencies).
