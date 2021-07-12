@@ -20,7 +20,7 @@ command = "rustup"
 install_crate = {crate_name = "basic-http-server", binary = "basic-http-server", test_arg="--help"}
 
 [tasks.wasm-bindgen-cli]
-# bevy_webgl2 depends on wasm-bindgen version 0.2.69 so we also have to
+# bevy_webgl2 depends on wasm-bindgen version 0.2.69 so we also have to. Should also update github action for Github Pages.
 install_crate = {crate_name = "wasm-bindgen-cli", binary = "wasm-bindgen", test_arg="--help", version = "0.2.69"}
 
 [tasks.cargo-build-web]
