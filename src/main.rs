@@ -12,6 +12,10 @@ pub enum AppState {
 }
 
 fn main() {
+    // When building for WASM, print panics to the browser console
+    #[cfg(target_arch = "wasm32")]
+    console_error_panic_hook::set_once();
+
     let mut app = App::build();
     app.insert_resource(ClearColor(Color::hex("171717").unwrap()));
     app.add_plugins(DefaultPlugins);

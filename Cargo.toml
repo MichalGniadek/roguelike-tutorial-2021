@@ -20,11 +20,12 @@ native = [
 web = [
   "bevy_webgl2",
   "getrandom/wasm-bindgen",
+  "console_error_panic_hook",
 ]
-
 
 [dependencies]
 bevy = {version="0.5.0", default-features = false}
 bevy_webgl2 = {version="0.5.0", optional = true}
-getrandom = { version = "0.2"}
 rand = "0.8.0"
+getrandom = { version = "0.2"}
+console_error_panic_hook = {version="0.1", optional = true}

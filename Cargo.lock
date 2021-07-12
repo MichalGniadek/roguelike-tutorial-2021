@@ -486,6 +486,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_webgl2",
+ "console_error_panic_hook",
  "getrandom",
  "rand",
 ]
