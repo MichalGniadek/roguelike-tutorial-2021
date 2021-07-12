@@ -6,9 +6,9 @@ jobs:
     steps:
       - name: Rust toolchain
         uses: actions-rs/toolchain@v1
-          with:
-            toolchain: nightly
-            override: true
+        with:
+          toolchain: nightly
+          override: true
             
       - name: cargo-make
         uses: davidB/rust-cargo-make@v1
