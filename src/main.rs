@@ -12,12 +12,19 @@ pub enum AppState {
 }
 
 fn main() {
-    App::build()
-        .insert_resource(ClearColor(Color::hex("171717").unwrap()))
-        .add_plugins(DefaultPlugins)
-        .add_system(bevy::input::system::exit_on_esc_system.system())
+    let mut app = App::build();
+    app.insert_resource(ClearColor(Color::hex("171717").unwrap()));
+    app.add_plugins(DefaultPlugins);
+
+    #[cfg(target_arch = "wasm32")]
+    app.add_plugin(bevy_webgl2::WebGL2Plugin);
+
+    app.add_system(bevy::input::system::exit_on_esc_system.system())
         .add_plugin(dungeon_crawl::DungeonCrawlPlugin)
         .add_plugins(world_generation::WorldGenerationPlugins)
-        .add_state(AppState::WorldGeneration(WorldGeneratorType::CellularAutomata))
-        .run();
+        .add_state(AppState::WorldGeneration(
+            WorldGeneratorType::CellularAutomata,
+        ));
+
+    app.run();
 }
