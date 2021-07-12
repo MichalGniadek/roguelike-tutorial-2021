@@ -1,0 +1,49 @@
+name: Deploy Github Page
+on: [push]
+jobs:
+  job0:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          target: wasm32-unknown-unknown
+          override: true
+            
+      - name: cargo-make
+        uses: davidB/rust-cargo-make@v1
+      
+      - name: wasm-bindgen
+        uses: jetli/wasm-bindgen-action@v0.1.0
+        with:
+          version: '0.2.69'
+      
+      - name: Check out repository code
+        uses: actions/checkout@v2
+         
+      - name: Run CI
+        uses: actions-rs/cargo@v1
+        with:
+          command: make
+          args: build-web
+         
+      - name: Create pages directory
+        run: mkdir pages
+      - name: Create pages/target directory
+        run: mkdir pages/target
+        
+      - name: Copy index.html
+        run: cp index.html pages/
+      - name: Copy assets
+        run: cp -r assets pages/
+      - name: Copy wasm_bg.wasm
+        run: cp target/wasm_bg.wasm pages/target/
+      - name: Copy wasm.js
+        run: cp target/wasm.js pages/target/
+        
+      - name: Update Github Pages branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./pages
