@@ -1,7 +1,30 @@
 <html>
 
 <head>
-    <title>Bevy roguelike</title>
+    <title>Roguelike</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=roboto">
+    <style>
+        body {
+            background-color: #171717;
+        }
+
+        canvas#canv {
+            padding-left: 0;
+            padding-right: 0;
+            margin-top: 1em;
+            margin-bottom: 1em;
+            margin-left: auto;
+            margin-right: auto;
+            display: block;
+        }
+
+        div#center-text {
+            color: #EDEDED;
+            text-align: center;
+            font-size: 1.5em;
+            font-family: "Roboto", sans-serif;
+        }
+    </style>
 </head>
 
 <body>
@@ -9,6 +32,9 @@
         import init from "./target/wasm.js";
         init();
     </script>
+
+    <canvas id="canv" style="border:2px solid #EDEDED;"></canvas>
+    <div id="center-text">Click to focus</div>
 </body>
 
 </html>

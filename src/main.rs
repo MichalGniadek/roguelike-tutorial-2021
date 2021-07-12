@@ -18,6 +18,13 @@ fn main() {
 
     let mut app = App::build();
     app.insert_resource(ClearColor(Color::hex("171717").unwrap()));
+    app.insert_resource(WindowDescriptor {
+        title: String::from("Roguelike"),
+        #[cfg(target_arch = "wasm32")]
+        canvas: Some(String::from("#canv")),
+        ..Default::default()
+    });
+
     app.add_plugins(DefaultPlugins);
 
     #[cfg(target_arch = "wasm32")]
