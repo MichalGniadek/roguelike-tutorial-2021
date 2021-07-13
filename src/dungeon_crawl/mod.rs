@@ -87,17 +87,28 @@ fn player_fov(
     let position = *player.single().unwrap();
 
     for end in fov_circle(position.x, position.y, 4) {
+        let mut previous = None;
         for (x, y) in line_drawing::Bresenham::new((position.x, position.y), end) {
             if let Some(&tile) = world.tiles.get(x, y) {
+                // Don't go through diagonal walls.
+                if let Some((prev_x, prev_y)) = previous {
+                    if (world.tiles[[prev_x, y]] & world.tiles[[x, prev_y]])
+                        .contains(TileFlags::BLOCKS_MOVEMENT)
+                    {
+                        break;
+                    }
+                }
+                previous = Some((x, y));
+
                 world.tiles[[x, y]] |= TileFlags::IN_VIEW;
 
                 // Remove artifacts
                 if !tile.contains(TileFlags::BLOCKS_MOVEMENT) {
-                    let dir = [
+                    // Different direction depending in which quadrant we are in.
+                    for (i, j) in [
                         (if position.x < x { 1 } else { -1 }, 0),
                         (0, if position.y < y { 1 } else { -1 }),
-                    ];
-                    for (i, j) in dir {
+                    ] {
                         if let Some(neigh) = world.tiles.get_mut(x + i, y + j) {
                             if neigh.contains(TileFlags::BLOCKS_MOVEMENT) {
                                 *neigh |= TileFlags::IN_VIEW;
