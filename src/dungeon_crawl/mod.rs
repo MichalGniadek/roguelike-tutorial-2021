@@ -169,12 +169,12 @@ fn fov_circle(x: i32, y: i32, r: i32) -> Vec<(i32, i32)> {
     for off in 0..=(r / 2) {
         points.push((x + off, y + r + 1));
         points.push((x - off, y + r + 1));
-        points.push((x + off, y - r + 1));
-        points.push((x - off, y - r + 1));
+        points.push((x + off, y - r - 1));
+        points.push((x - off, y - r - 1));
         points.push((x + r + 1, y + off));
-        points.push((x - r + 1, y + off));
+        points.push((x - r - 1, y + off));
         points.push((x + r + 1, y - off));
-        points.push((x - r + 1, y - off));
+        points.push((x - r - 1, y - off));
     }
     points
 }
