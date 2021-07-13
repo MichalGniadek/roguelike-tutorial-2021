@@ -1,101 +1,54 @@
 use crate::{
     world_generation::WorldGeneratorType,
-    world_map::{Grid, GridPosition, Tile, WorldMap},
+    world_map::{BlocksMovement, Grid, GridPosition, WorldMap},
     AppState,
 };
-use bevy::{math::ivec2, prelude::*, render::camera::Camera};
+use bevy::{prelude::*, render::camera::Camera};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TurnState {
+    NewTurn,
+    DuringTurn,
+}
 
 pub struct DungeonCrawlPlugin;
 impl Plugin for DungeonCrawlPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app.insert_resource(Grid {
-            cell_size: IVec2::new(512, 512),
-        })
-        .add_startup_system(
-            (|mut commands: Commands| {
-                let mut orto = OrthographicCameraBundle::new_2d();
-                orto.orthographic_projection.scale = 8.0;
-                commands
-                    .spawn_bundle(orto)
-                    .insert(GridPosition { x: 0, y: 0 });
-            })
-            .system(),
-        )
-        .add_system_set(
-            SystemSet::on_enter(AppState::DungeonCrawl).with_system(spawn_player.system()),
-        )
-        .add_system_set(
-            SystemSet::on_update(AppState::DungeonCrawl)
-                .label("display")
+        // New turn
+        app.add_system_set(
+            SystemSet::on_enter(AppState::DungeonCrawl(TurnState::NewTurn))
+                .with_system(update_position.system().before("camera"))
                 .with_system(camera_position.system().label("camera"))
-                .with_system(update_position.system().after("camera")),
-        )
-        .add_system_set(
-            SystemSet::on_update(AppState::DungeonCrawl)
-                .after("display")
+                .with_system(update_world_map.system())
+                .with_system(
+                    (|mut app_state: ResMut<State<AppState>>| {
+                        app_state
+                            .set(AppState::DungeonCrawl(TurnState::DuringTurn))
+                            .unwrap();
+                    })
+                    .system(),
+                ),
+        );
+
+        // During turn
+        app.add_system_set(
+            SystemSet::on_update(AppState::DungeonCrawl(TurnState::DuringTurn))
                 .with_system(player_control.system()),
-        )
-        .add_system_set(
-            SystemSet::on_exit(AppState::DungeonCrawl)
-                .after("display")
-                .with_system(cleanup_play.system()),
         );
     }
 }
 
-struct Player;
-struct Initiative;
+pub struct Player;
+pub struct Initiative;
 
-fn spawn_player(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    world: Res<WorldMap>,
-    tile_query: Query<&Tile>,
-) {
-    let mut player_pos = ivec2(0, 0);
-    'finished: for x in 0..world.world_size.x {
+fn update_world_map(mut world: ResMut<WorldMap>, m: Query<&BlocksMovement>) {
+    for x in 0..world.world_size.x {
         for y in 0..world.world_size.y {
-            match world.tiles[x as usize][y as usize] {
-                Some(e) => {
-                    if tile_query.get(e).unwrap().walkable {
-                        player_pos = ivec2(x, y);
-                        break 'finished;
-                    }
-                }
-                None => continue,
-            }
+            world.movement_blocked[[x, y]] = world.entities[[x, y]]
+                .iter()
+                .any(|e| matches!(m.get(*e), Ok(&BlocksMovement)));
         }
     }
-
-    commands
-        .spawn_bundle(SpriteBundle {
-            material: materials.add(ColorMaterial {
-                texture: Some(asset_server.load("hooded-figure.png")),
-                color: Color::hex("EDEDED").unwrap(),
-            }),
-            transform: Transform::from_xyz(0.0, 0.0, 1.0),
-            ..Default::default()
-        })
-        .insert_bundle((
-            Player,
-            Initiative,
-            GridPosition {
-                x: player_pos.x,
-                y: player_pos.y,
-            },
-        ));
-
-    // commands
-    //     .spawn_bundle(SpriteBundle {
-    //         material: materials.add(ColorMaterial {
-    //             texture: Some(asset_server.load("orc-head.png")),
-    //             color: Color::hex("DA0037").unwrap(),
-    //         }),
-    //         transform: Transform::from_xyz(0.0, 0.0, 1.0),
-    //         ..Default::default()
-    //     })
-    //     .insert(GridPosition { x: 7, y: 7 });
 }
 
 fn update_position(
@@ -113,10 +66,9 @@ fn update_position(
 
 fn player_control(
     mut query: Query<&mut GridPosition, (With<Player>, With<Initiative>)>,
-    tile_query: Query<&Tile>,
     world: Res<WorldMap>,
     keys: Res<Input<KeyCode>>,
-    mut temp_app_state: ResMut<State<AppState>>,
+    mut app_state: ResMut<State<AppState>>,
 ) {
     let mut position = query.single_mut().unwrap();
     let mut new_pos = position.clone();
@@ -127,7 +79,7 @@ fn player_control(
             Some(KeyCode::Down | KeyCode::S) => new_pos.y -= 1,
             Some(KeyCode::Left | KeyCode::A) => new_pos.x -= 1,
             Some(KeyCode::Right | KeyCode::D) => new_pos.x += 1,
-            Some(KeyCode::R) => temp_app_state
+            Some(KeyCode::R) => app_state
                 .set(AppState::WorldGeneration(
                     WorldGeneratorType::CellularAutomata,
                 ))
@@ -136,36 +88,29 @@ fn player_control(
         }
     }
 
-    let tile = world.tiles[new_pos.x as usize][new_pos.y as usize].unwrap();
-    let tile = tile_query.get(tile).unwrap();
-    if tile.walkable {
+    if *position != new_pos && !world.movement_blocked[new_pos] {
         *position = new_pos;
+        app_state
+            .set(AppState::DungeonCrawl(TurnState::NewTurn))
+            .unwrap();
     }
 }
 
 fn camera_position(
     mut query: QuerySet<(
-        Query<&GridPosition, With<Player>>,
-        Query<&mut GridPosition, With<Camera>>,
+        Query<&Transform, With<Player>>,
+        Query<&mut Transform, With<Camera>>,
     )>,
 ) {
-    let position = query.q0_mut().single_mut().unwrap().clone();
+    let mut position = query.q0_mut().single_mut().unwrap().clone();
     let mut camera = query.q1_mut().single_mut().unwrap();
+    position.translation.z = camera.translation.z;
     *camera = position;
 }
 
-fn cleanup_play(
-    tile_query: Query<(Entity, &Tile)>,
-    player_query: Query<(Entity, &Player)>,
-    mut commands: Commands,
-) {
-    for (e, _) in tile_query.iter() {
-        commands.entity(e).despawn();
-    }
-
-    for (e, _) in player_query.iter() {
-        commands.entity(e).despawn();
-    }
-
-    commands.remove_resource::<WorldMap>();
-}
+// fn cleanup_play(query: Query<Entity, With<GridPosition>>, mut commands: Commands) {
+//     for e in query.iter() {
+//         commands.entity(e).despawn();
+//     }
+//     commands.remove_resource::<WorldMap>();
+// }

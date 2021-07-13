@@ -1,5 +1,6 @@
 use super::WorldGeneratorType;
-use crate::world_map::{TileFactory, WorldMap};
+use crate::dungeon_crawl::TurnState;
+use crate::world_map::{Array2D, TileFactory, WorldMap};
 use crate::AppState;
 use bevy::{math::ivec2, prelude::*};
 use rand::random;
@@ -150,7 +151,9 @@ pub fn drunkard_walk(
     }
 
     if drunkards.iter_mut().len() == 0 {
-        app_state.set(AppState::DungeonCrawl).unwrap();
+        app_state
+            .set(AppState::DungeonCrawl(TurnState::NewTurn))
+            .unwrap();
     }
 }
 
@@ -176,7 +179,7 @@ pub fn finish_drunkard(
                 .get(ivec2(x + world.bounds.0.x, y + world.bounds.0.y))
                 .unwrap()
             {
-                column.push(Some(commands.spawn_bundle(tile_factory.floor(x, y)).id()));
+                // column.push(vec![commands.spawn_bundle(tile_factory.floor(x, y)).id()]);
             } else {
                 let mut adjacent_floor = false;
                 for i in -1..=1 {
@@ -187,9 +190,11 @@ pub fn finish_drunkard(
                     }
                 }
                 if adjacent_floor {
-                    column.push(Some(commands.spawn_bundle(tile_factory.wall(x, y)).id()));
+                    // column.push(vec![commands
+                    //     .spawn_bundle(tile_factory.wall_bundle(x, y))
+                    //     .id()]);
                 } else {
-                    column.push(None)
+                    column.push(vec![])
                 }
             };
         }
@@ -199,7 +204,10 @@ pub fn finish_drunkard(
     commands.remove_resource::<DrunkardMap>();
     commands.insert_resource(WorldMap {
         world_size,
-        tiles,
+        entities: Array2D::from_vecs(tiles),
         tile_factory,
+        movement_blocked: Array2D::with_size(world_size.x, world_size.y),
     });
+
+    panic!("Drunkard wasn't updated to generate player");
 }

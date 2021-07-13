@@ -1,6 +1,7 @@
 use super::WorldGeneratorType;
 use crate::{
-    world_map::{TileFactory, WorldMap},
+    dungeon_crawl::{Initiative, Player, TurnState},
+    world_map::{Array2D, GridPosition, TileFactory, WorldMap},
     AppState,
 };
 use bevy::{math::ivec2, prelude::*};
@@ -65,48 +66,75 @@ fn cellular_automata(
         }
     }
 
+    let mut spawned_player = false;
+
     let tile_factory = TileFactory::new(&asset_server, &mut materials);
     let mut tiles = vec![];
     for x in 1..MAP_SIZE - 1 {
         let mut column = vec![];
         for y in 1..MAP_SIZE - 1 {
+            let mut entities = vec![];
+
             if map[x][y] == TileType::Alive(max_fill_number) {
-                column.push(Some(
-                    commands
-                        .spawn_bundle(tile_factory.floor(x as i32 - 1, y as i32 - 1))
-                        .id(),
-                ));
+                entities.push(tile_factory.floor(&mut commands, x as i32 - 1, y as i32 - 1));
+
+                // Spawn player on the first top-left floor
+                if !spawned_player {
+                    spawned_player = true;
+                    entities.push(
+                        commands
+                            .spawn_bundle(SpriteBundle {
+                                material: materials.add(ColorMaterial {
+                                    texture: Some(asset_server.load("hooded-figure.png")),
+                                    color: Color::hex("EDEDED").unwrap(),
+                                }),
+                                transform: Transform::from_xyz(0.0, 0.0, 1.0),
+                                ..Default::default()
+                            })
+                            .insert_bundle((
+                                Player,
+                                Initiative,
+                                GridPosition {
+                                    x: x as i32,
+                                    y: y as i32,
+                                },
+                            ))
+                            .id(),
+                    );
+                }
             } else {
-                let mut adjacent_floor = false;
+                // Show wall only if it's adjencent to a floor
                 for i in -1..=1i32 {
                     for j in -1..=1i32 {
                         if map[(x as i32 + i) as usize][(y as i32 + j) as usize]
                             == TileType::Alive(max_fill_number)
                         {
-                            adjacent_floor = true;
+                            entities.push(tile_factory.wall(
+                                &mut commands,
+                                x as i32 - 1,
+                                y as i32 - 1,
+                            ));
+                            break;
                         }
                     }
                 }
-                if adjacent_floor {
-                    column.push(Some(
-                        commands
-                            .spawn_bundle(tile_factory.wall(x as i32 - 1, y as i32 - 1))
-                            .id(),
-                    ));
-                } else {
-                    column.push(None)
-                }
             };
+
+            column.push(entities);
         }
         tiles.push(column);
     }
 
     commands.insert_resource(WorldMap {
         world_size: ivec2(MAP_SIZE as i32 - 2, MAP_SIZE as i32 - 2),
-        tiles,
+        entities: Array2D::from_vecs(tiles),
         tile_factory,
+        movement_blocked: Array2D::with_size(MAP_SIZE as i32 - 2, MAP_SIZE as i32 - 2),
     });
-    app_state.set(AppState::DungeonCrawl).unwrap();
+
+    app_state
+        .set(AppState::DungeonCrawl(TurnState::NewTurn))
+        .unwrap();
 }
 
 fn get_random_map() -> Vec<Vec<TileType>> {

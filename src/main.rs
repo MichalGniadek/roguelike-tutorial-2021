@@ -3,12 +3,14 @@ mod world_generation;
 mod world_map;
 
 use bevy::prelude::*;
+use dungeon_crawl::TurnState;
 use world_generation::WorldGeneratorType;
+use world_map::Grid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AppState {
     WorldGeneration(WorldGeneratorType),
-    DungeonCrawl,
+    DungeonCrawl(TurnState),
 }
 
 fn main() {
@@ -26,6 +28,18 @@ fn main() {
     });
 
     app.add_plugins(DefaultPlugins);
+
+    app.insert_resource(Grid {
+        cell_size: IVec2::new(512, 512),
+    })
+    .add_startup_system(
+        (|mut commands: Commands| {
+            let mut orto = OrthographicCameraBundle::new_2d();
+            orto.orthographic_projection.scale = 8.0;
+            commands.spawn_bundle(orto);
+        })
+        .system(),
+    );
 
     #[cfg(target_arch = "wasm32")]
     app.add_plugin(bevy_webgl2::WebGL2Plugin);
