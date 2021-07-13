@@ -12,6 +12,7 @@ pub struct GridPosition {
     pub y: i32,
 }
 
+pub struct Tile;
 pub struct BlocksMovement;
 pub struct BlocksVision;
 
@@ -82,6 +83,7 @@ bitflags! {
         const BLOCKS_MOVEMENT = 0b00000001;
         const BLOCKS_VISION = 0b00000010;
         const IN_VIEW = 0b00000100;
+        const EXPLORED = 0b00001000;
     }
 }
 
@@ -100,8 +102,11 @@ pub struct WorldMap {
 }
 
 pub struct TileFactory {
-    wall_material: Handle<ColorMaterial>,
-    floor_material: Handle<ColorMaterial>,
+    pub visible_wall_material: Handle<ColorMaterial>,
+    pub visible_floor_material: Handle<ColorMaterial>,
+
+    pub explored_wall_material: Handle<ColorMaterial>,
+    pub explored_floor_material: Handle<ColorMaterial>,
 }
 
 impl TileFactory {
@@ -110,11 +115,19 @@ impl TileFactory {
         materials: &mut ResMut<Assets<ColorMaterial>>,
     ) -> Self {
         Self {
-            wall_material: materials.add(ColorMaterial {
+            visible_wall_material: materials.add(ColorMaterial {
+                texture: Some(asset_server.load("brick-wall.png")),
+                color: Color::hex("826007").unwrap(),
+            }),
+            visible_floor_material: materials.add(ColorMaterial {
+                texture: Some(asset_server.load("square.png")),
+                color: Color::hex("826007").unwrap(),
+            }),
+            explored_wall_material: materials.add(ColorMaterial {
                 texture: Some(asset_server.load("brick-wall.png")),
                 color: Color::hex("444444").unwrap(),
             }),
-            floor_material: materials.add(ColorMaterial {
+            explored_floor_material: materials.add(ColorMaterial {
                 texture: Some(asset_server.load("square.png")),
                 color: Color::hex("444444").unwrap(),
             }),
@@ -124,20 +137,20 @@ impl TileFactory {
     pub fn wall(&self, commands: &mut Commands, x: i32, y: i32) -> Entity {
         commands
             .spawn_bundle(SpriteBundle {
-                material: self.wall_material.clone(),
+                material: self.explored_wall_material.clone(),
                 ..Default::default()
             })
-            .insert_bundle((GridPosition { x, y }, BlocksMovement, BlocksVision))
+            .insert_bundle((Tile, GridPosition { x, y }, BlocksMovement, BlocksVision))
             .id()
     }
 
     pub fn floor(&self, commands: &mut Commands, x: i32, y: i32) -> Entity {
         commands
             .spawn_bundle(SpriteBundle {
-                material: self.floor_material.clone(),
+                material: self.explored_floor_material.clone(),
                 ..Default::default()
             })
-            .insert(GridPosition { x, y })
+            .insert_bundle((Tile, GridPosition { x, y }))
             .id()
     }
 }

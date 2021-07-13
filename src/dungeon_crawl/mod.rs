@@ -1,6 +1,6 @@
 use crate::{
     world_generation::WorldGeneratorType,
-    world_map::{BlocksMovement, BlocksVision, Grid, GridPosition, TileFlags, WorldMap},
+    world_map::{BlocksMovement, BlocksVision, Grid, GridPosition, Tile, TileFlags, WorldMap},
     AppState,
 };
 use bevy::{prelude::*, render::camera::Camera};
@@ -52,7 +52,7 @@ fn update_world_map(
 ) {
     for x in 0..world.world_size.x {
         for y in 0..world.world_size.y {
-            world.tiles[[x, y]] = TileFlags::empty();
+            world.tiles[[x, y]] &= TileFlags::EXPLORED;
         }
     }
 
@@ -81,7 +81,8 @@ fn update_world_map(
 
 fn player_fov(
     player: Query<&GridPosition, (With<Player>, With<Initiative>)>,
-    mut entities: Query<(&mut Visible, &GridPosition)>,
+    mut visible: Query<(&mut Visible, &GridPosition)>,
+    mut tiles: Query<(&mut Handle<ColorMaterial>, &GridPosition), With<Tile>>,
     mut world: ResMut<WorldMap>,
 ) {
     let position = *player.single().unwrap();
@@ -124,8 +125,32 @@ fn player_fov(
         }
     }
 
-    for (mut visible, pos) in entities.iter_mut() {
-        visible.is_visible = world.tiles[[pos.x, pos.y]].contains(TileFlags::IN_VIEW);
+    for x in 0..world.world_size.x {
+        for y in 0..world.world_size.y {
+            if world.tiles[[x, y]].contains(TileFlags::IN_VIEW) {
+                world.tiles[[x, y]] |= TileFlags::EXPLORED;
+            }
+        }
+    }
+
+    for (mut visible, pos) in visible.iter_mut() {
+        visible.is_visible = world.tiles[[pos.x, pos.y]].contains(TileFlags::EXPLORED);
+    }
+
+    for (mut mat, pos) in tiles.iter_mut() {
+        if world.tiles[[pos.x, pos.y]].contains(TileFlags::IN_VIEW) {
+            if mat.id == world.tile_factory.explored_floor_material.id {
+                *mat = world.tile_factory.visible_floor_material.clone();
+            } else if mat.id == world.tile_factory.explored_wall_material.id {
+                *mat = world.tile_factory.visible_wall_material.clone();
+            }
+        } else {
+            if mat.id == world.tile_factory.visible_floor_material.id {
+                *mat = world.tile_factory.explored_floor_material.clone();
+            } else if mat.id == world.tile_factory.visible_wall_material.id {
+                *mat = world.tile_factory.explored_wall_material.clone();
+            }
+        }
     }
 }
 
