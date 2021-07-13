@@ -206,7 +206,7 @@ pub fn finish_drunkard(
         world_size,
         entities: Array2D::from_vecs(tiles),
         tile_factory,
-        movement_blocked: Array2D::with_size(world_size.x, world_size.y),
+        tiles: Array2D::with_size(world_size.x, world_size.y),
     });
 
     panic!("Drunkard wasn't updated to generate player");

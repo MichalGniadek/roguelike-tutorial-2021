@@ -1,6 +1,6 @@
 use crate::{
     world_generation::WorldGeneratorType,
-    world_map::{BlocksMovement, Grid, GridPosition, WorldMap},
+    world_map::{BlocksMovement, BlocksVision, Grid, GridPosition, TileFlags, WorldMap},
     AppState,
 };
 use bevy::{prelude::*, render::camera::Camera};
@@ -32,6 +32,10 @@ impl Plugin for DungeonCrawlPlugin {
 
         // During turn
         app.add_system_set(
+            SystemSet::on_enter(AppState::DungeonCrawl(TurnState::DuringTurn))
+                .with_system(player_fov.system()),
+        );
+        app.add_system_set(
             SystemSet::on_update(AppState::DungeonCrawl(TurnState::DuringTurn))
                 .with_system(player_control.system()),
         );
@@ -41,14 +45,102 @@ impl Plugin for DungeonCrawlPlugin {
 pub struct Player;
 pub struct Initiative;
 
-fn update_world_map(mut world: ResMut<WorldMap>, m: Query<&BlocksMovement>) {
+fn update_world_map(
+    mut world: ResMut<WorldMap>,
+    m: Query<&BlocksMovement>,
+    v: Query<&BlocksVision>,
+) {
     for x in 0..world.world_size.x {
         for y in 0..world.world_size.y {
-            world.movement_blocked[[x, y]] = world.entities[[x, y]]
-                .iter()
-                .any(|e| matches!(m.get(*e), Ok(&BlocksMovement)));
+            world.tiles[[x, y]] = TileFlags::empty();
         }
     }
+
+    for x in 0..world.world_size.x {
+        for y in 0..world.world_size.y {
+            if world.entities[[x, y]]
+                .iter()
+                .any(|e| matches!(m.get(*e), Ok(&BlocksMovement)))
+            {
+                world.tiles[[x, y]] |= TileFlags::BLOCKS_MOVEMENT;
+            }
+        }
+    }
+
+    for x in 0..world.world_size.x {
+        for y in 0..world.world_size.y {
+            if world.entities[[x, y]]
+                .iter()
+                .any(|e| matches!(v.get(*e), Ok(&BlocksVision)))
+            {
+                world.tiles[[x, y]] |= TileFlags::BLOCKS_VISION;
+            }
+        }
+    }
+}
+
+fn player_fov(
+    player: Query<&GridPosition, (With<Player>, With<Initiative>)>,
+    mut entities: Query<(&mut Visible, &GridPosition)>,
+    mut world: ResMut<WorldMap>,
+) {
+    let position = *player.single().unwrap();
+
+    for end in fov_circle(position.x, position.y, 4) {
+        for (x, y) in line_drawing::Bresenham::new((position.x, position.y), end) {
+            if let Some(&tile) = world.tiles.get(x, y) {
+                world.tiles[[x, y]] |= TileFlags::IN_VIEW;
+
+                // Remove artifacts
+                if !tile.contains(TileFlags::BLOCKS_MOVEMENT) {
+                    let dir = [
+                        (if position.x < x { 1 } else { -1 }, 0),
+                        (0, if position.y < y { 1 } else { -1 }),
+                    ];
+                    for (i, j) in dir {
+                        if let Some(neigh) = world.tiles.get_mut(x + i, y + j) {
+                            if neigh.contains(TileFlags::BLOCKS_MOVEMENT) {
+                                *neigh |= TileFlags::IN_VIEW;
+                            }
+                        }
+                    }
+                }
+
+                if tile.contains(TileFlags::BLOCKS_VISION) {
+                    break;
+                }
+            }
+        }
+    }
+
+    for (mut visible, pos) in entities.iter_mut() {
+        visible.is_visible = world.tiles[[pos.x, pos.y]].contains(TileFlags::IN_VIEW);
+    }
+}
+
+fn fov_circle(x: i32, y: i32, r: i32) -> Vec<(i32, i32)> {
+    let mut points = vec![];
+    for off in 0..=r {
+        points.push((x + off, y + r));
+        points.push((x - off, y + r));
+        points.push((x + off, y - r));
+        points.push((x - off, y - r));
+        points.push((x + r, y + off));
+        points.push((x - r, y + off));
+        points.push((x + r, y - off));
+        points.push((x - r, y - off));
+    }
+    for off in 0..=(r / 2) {
+        points.push((x + off, y + r + 1));
+        points.push((x - off, y + r + 1));
+        points.push((x + off, y - r + 1));
+        points.push((x - off, y - r + 1));
+        points.push((x + r + 1, y + off));
+        points.push((x - r + 1, y + off));
+        points.push((x + r + 1, y - off));
+        points.push((x - r + 1, y - off));
+    }
+    points
 }
 
 fn update_position(
@@ -88,7 +180,7 @@ fn player_control(
         }
     }
 
-    if *position != new_pos && !world.movement_blocked[new_pos] {
+    if *position != new_pos && !world.tiles[new_pos].contains(TileFlags::BLOCKS_MOVEMENT) {
         *position = new_pos;
         app_state
             .set(AppState::DungeonCrawl(TurnState::NewTurn))

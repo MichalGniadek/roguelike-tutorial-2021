@@ -129,7 +129,7 @@ fn cellular_automata(
         world_size: ivec2(MAP_SIZE as i32 - 2, MAP_SIZE as i32 - 2),
         entities: Array2D::from_vecs(tiles),
         tile_factory,
-        movement_blocked: Array2D::with_size(MAP_SIZE as i32 - 2, MAP_SIZE as i32 - 2),
+        tiles: Array2D::with_size(MAP_SIZE as i32 - 2, MAP_SIZE as i32 - 2),
     });
 
     app_state

@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bitflags::bitflags;
 use std::ops::{Index, IndexMut};
 
 pub struct Grid {
@@ -32,6 +33,20 @@ impl<T> Array2D<T> {
     pub fn from_vecs(elems: Vec<Vec<T>>) -> Self {
         Self { elems }
     }
+
+    pub fn get(&self, x: i32, y: i32) -> Option<&T> {
+        self.elems
+            .get(x as usize)
+            .map(|r| r.get(y as usize))
+            .flatten()
+    }
+
+    pub fn get_mut(&mut self, x: i32, y: i32) -> Option<&mut T> {
+        self.elems
+            .get_mut(x as usize)
+            .map(|r| r.get_mut(y as usize))
+            .flatten()
+    }
 }
 
 impl<T> Index<[i32; 2]> for Array2D<T> {
@@ -62,12 +77,26 @@ impl<T> IndexMut<GridPosition> for Array2D<T> {
     }
 }
 
+bitflags! {
+    pub struct TileFlags: u32 {
+        const BLOCKS_MOVEMENT = 0b00000001;
+        const BLOCKS_VISION = 0b00000010;
+        const IN_VIEW = 0b00000100;
+    }
+}
+
+impl Default for TileFlags {
+    fn default() -> Self {
+        TileFlags::empty()
+    }
+}
+
 pub struct WorldMap {
     pub world_size: IVec2,
     pub entities: Array2D<Vec<Entity>>,
     pub tile_factory: TileFactory,
 
-    pub movement_blocked: Array2D<bool>,
+    pub tiles: Array2D<TileFlags>,
 }
 
 pub struct TileFactory {
