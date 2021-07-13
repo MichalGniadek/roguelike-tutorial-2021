@@ -95,8 +95,8 @@ fn cellular_automata(
                                 Player,
                                 Initiative,
                                 GridPosition {
-                                    x: x as i32,
-                                    y: y as i32,
+                                    x: x as i32 - 1,
+                                    y: y as i32 - 1,
                                 },
                             ))
                             .id(),
