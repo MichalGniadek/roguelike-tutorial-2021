@@ -50,14 +50,15 @@ fn update_world_map(
     m: Query<&BlocksMovement>,
     v: Query<&BlocksVision>,
 ) {
-    for x in 0..world.world_size.x {
-        for y in 0..world.world_size.y {
+    let world_size = world.entities.size();
+    for x in 0..world_size.x {
+        for y in 0..world_size.y {
             world.tiles[[x, y]] &= TileFlags::EXPLORED;
         }
     }
 
-    for x in 0..world.world_size.x {
-        for y in 0..world.world_size.y {
+    for x in 0..world_size.x {
+        for y in 0..world_size.y {
             if world.entities[[x, y]]
                 .iter()
                 .any(|e| matches!(m.get(*e), Ok(&BlocksMovement)))
@@ -67,8 +68,8 @@ fn update_world_map(
         }
     }
 
-    for x in 0..world.world_size.x {
-        for y in 0..world.world_size.y {
+    for x in 0..world_size.x {
+        for y in 0..world_size.y {
             if world.entities[[x, y]]
                 .iter()
                 .any(|e| matches!(v.get(*e), Ok(&BlocksVision)))
@@ -107,8 +108,8 @@ fn player_fov(
                 if !tile.contains(TileFlags::BLOCKS_MOVEMENT) {
                     // Different direction depending in which quadrant we are in.
                     for (i, j) in [
-                        (if position.x < x { 1 } else { -1 }, 0),
-                        (0, if position.y < y { 1 } else { -1 }),
+                        ((x - position.x).signum(), 0),
+                        (0, (y - position.y).signum()),
                     ] {
                         if let Some(neigh) = world.tiles.get_mut(x + i, y + j) {
                             if neigh.contains(TileFlags::BLOCKS_MOVEMENT) {
@@ -125,8 +126,8 @@ fn player_fov(
         }
     }
 
-    for x in 0..world.world_size.x {
-        for y in 0..world.world_size.y {
+    for x in 0..world.entities.size().x {
+        for y in 0..world.entities.size().y {
             if world.tiles[[x, y]].contains(TileFlags::IN_VIEW) {
                 world.tiles[[x, y]] |= TileFlags::EXPLORED;
             }
@@ -184,8 +185,8 @@ fn update_position(
     grid: Res<Grid>,
     world: Res<WorldMap>,
 ) {
-    let offset_x = (world.world_size.x as f32 - 1.0) * (grid.cell_size.x as f32) / 2.0;
-    let offset_y = (world.world_size.y as f32 - 1.0) * (grid.cell_size.y as f32) / 2.0;
+    let offset_x = (world.entities.size().x as f32 - 1.0) * (grid.cell_size.x as f32) / 2.0;
+    let offset_y = (world.entities.size().y as f32 - 1.0) * (grid.cell_size.y as f32) / 2.0;
     for (mut transform, grid_position) in query.iter_mut() {
         transform.translation.x = (grid_position.x * grid.cell_size.x) as f32 - offset_x;
         transform.translation.y = (grid_position.y * grid.cell_size.y) as f32 - offset_y;

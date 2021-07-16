@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{math::ivec2, prelude::*};
 use bitflags::bitflags;
 use std::ops::{Index, IndexMut};
 
@@ -22,6 +22,15 @@ pub struct Array2D<T> {
 }
 
 impl<T> Array2D<T> {
+    pub fn with_elem(x: i32, y: i32, val: T) -> Self
+    where
+        T: Clone,
+    {
+        Self {
+            elems: vec![vec![val; y as usize]; x as usize],
+        }
+    }
+
     pub fn with_size(x: i32, y: i32) -> Self
     where
         T: Default + Clone,
@@ -48,6 +57,10 @@ impl<T> Array2D<T> {
             .map(|r| r.get_mut(y as usize))
             .flatten()
     }
+
+    pub fn size(&self) -> IVec2 {
+        ivec2(self.elems.len() as i32, self.elems[0].len() as i32)
+    }
 }
 
 impl<T> Index<[i32; 2]> for Array2D<T> {
@@ -61,6 +74,34 @@ impl<T> Index<[i32; 2]> for Array2D<T> {
 impl<T> IndexMut<[i32; 2]> for Array2D<T> {
     fn index_mut(&mut self, index: [i32; 2]) -> &mut Self::Output {
         &mut self.elems[index[0] as usize][index[1] as usize]
+    }
+}
+
+impl<T> Index<[usize; 2]> for Array2D<T> {
+    type Output = T;
+
+    fn index(&self, index: [usize; 2]) -> &Self::Output {
+        &self.elems[index[0]][index[1]]
+    }
+}
+
+impl<T> IndexMut<[usize; 2]> for Array2D<T> {
+    fn index_mut(&mut self, index: [usize; 2]) -> &mut Self::Output {
+        &mut self.elems[index[0]][index[1]]
+    }
+}
+
+impl<T> Index<(i32, i32)> for Array2D<T> {
+    type Output = T;
+
+    fn index(&self, index: (i32, i32)) -> &Self::Output {
+        &self.elems[index.0 as usize][index.1 as usize]
+    }
+}
+
+impl<T> IndexMut<(i32, i32)> for Array2D<T> {
+    fn index_mut(&mut self, index: (i32, i32)) -> &mut Self::Output {
+        &mut self.elems[index.0 as usize][index.1 as usize]
     }
 }
 
@@ -94,7 +135,6 @@ impl Default for TileFlags {
 }
 
 pub struct WorldMap {
-    pub world_size: IVec2,
     pub entities: Array2D<Vec<Entity>>,
     pub tile_factory: TileFactory,
 

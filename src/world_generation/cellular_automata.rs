@@ -4,7 +4,7 @@ use crate::{
     world_map::{Array2D, GridPosition, TileFactory, WorldMap},
     AppState,
 };
-use bevy::{math::ivec2, prelude::*};
+use bevy::prelude::*;
 use rand::random;
 use std::mem;
 
@@ -20,7 +20,7 @@ impl Plugin for CellularAutomataPlugin {
     }
 }
 
-const MAP_SIZE: usize = 40;
+const MAP_SIZE: i32 = 40;
 const ALIVE_SPAWN_CHANCE: f32 = 0.45;
 const ITERATIONS: u32 = 2;
 
@@ -36,20 +36,20 @@ fn cellular_automata(
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut app_state: ResMut<State<AppState>>,
 ) {
-    let mut map;
+    let mut tile_map;
     let mut max_fill_number;
     let mut max_fill_count;
     loop {
-        map = get_random_map();
-        cellular_automata_steps(&mut map, ITERATIONS);
+        tile_map = get_random_map();
+        cellular_automata_steps(&mut tile_map, ITERATIONS);
 
         let mut current_fill_number = 1;
         max_fill_number = 0;
         max_fill_count = 0;
         for x in 2..MAP_SIZE - 2 {
             for y in 2..MAP_SIZE - 2 {
-                if map[x][y] == TileType::Alive(0) {
-                    let count = flood_fill_from(&mut map, (x, y), current_fill_number);
+                if tile_map[[x, y]] == TileType::Alive(0) {
+                    let count = flood_fill_from(&mut tile_map, (x, y), current_fill_number);
 
                     if max_fill_count < count {
                         max_fill_count = count;
@@ -67,21 +67,20 @@ fn cellular_automata(
     }
 
     let mut spawned_player = false;
+    let mut entities = Array2D::<Vec<Entity>>::with_size(MAP_SIZE - 2, MAP_SIZE - 2);
 
     let tile_factory = TileFactory::new(&asset_server, &mut materials);
-    let mut tiles = vec![];
     for x in 1..MAP_SIZE - 1 {
-        let mut column = vec![];
         for y in 1..MAP_SIZE - 1 {
-            let mut entities = vec![];
+            let mut tile = vec![];
 
-            if map[x][y] == TileType::Alive(max_fill_number) {
-                entities.push(tile_factory.floor(&mut commands, x as i32 - 1, y as i32 - 1));
+            if tile_map[[x, y]] == TileType::Alive(max_fill_number) {
+                tile.push(tile_factory.floor(&mut commands, x - 1, y - 1));
 
                 // Spawn player on the first top-left floor
                 if !spawned_player {
                     spawned_player = true;
-                    entities.push(
+                    tile.push(
                         commands
                             .spawn_bundle(SpriteBundle {
                                 material: materials.add(ColorMaterial {
@@ -94,10 +93,7 @@ fn cellular_automata(
                             .insert_bundle((
                                 Player,
                                 Initiative,
-                                GridPosition {
-                                    x: x as i32 - 1,
-                                    y: y as i32 - 1,
-                                },
+                                GridPosition { x: x - 1, y: y - 1 },
                             ))
                             .id(),
                     );
@@ -106,30 +102,22 @@ fn cellular_automata(
                 // Show wall only if it's adjencent to a floor
                 for i in -1..=1i32 {
                     for j in -1..=1i32 {
-                        if map[(x as i32 + i) as usize][(y as i32 + j) as usize]
-                            == TileType::Alive(max_fill_number)
-                        {
-                            entities.push(tile_factory.wall(
-                                &mut commands,
-                                x as i32 - 1,
-                                y as i32 - 1,
-                            ));
+                        if tile_map[[x + i, y + j]] == TileType::Alive(max_fill_number) {
+                            tile.push(tile_factory.wall(&mut commands, x - 1, y - 1));
                             break;
                         }
                     }
                 }
             };
 
-            column.push(entities);
+            entities[[x - 1, y - 1]] = tile;
         }
-        tiles.push(column);
     }
 
     commands.insert_resource(WorldMap {
-        world_size: ivec2(MAP_SIZE as i32 - 2, MAP_SIZE as i32 - 2),
-        entities: Array2D::from_vecs(tiles),
+        entities,
         tile_factory,
-        tiles: Array2D::with_size(MAP_SIZE as i32 - 2, MAP_SIZE as i32 - 2),
+        tiles: Array2D::with_size(MAP_SIZE - 2, MAP_SIZE - 2),
     });
 
     app_state
@@ -137,15 +125,13 @@ fn cellular_automata(
         .unwrap();
 }
 
-fn get_random_map() -> Vec<Vec<TileType>> {
-    let mut map = vec![vec![TileType::Dead; MAP_SIZE]; MAP_SIZE];
+fn get_random_map() -> Array2D<TileType> {
+    let mut map = Array2D::<TileType>::with_elem(MAP_SIZE, MAP_SIZE, TileType::Dead);
 
     for x in 2..MAP_SIZE - 2 {
         for y in 2..MAP_SIZE - 2 {
             if random::<f32>() < ALIVE_SPAWN_CHANCE {
-                map[x][y] = TileType::Alive(0);
-            } else {
-                map[x][y] = TileType::Dead;
+                map[[x, y]] = TileType::Alive(0);
             }
         }
     }
@@ -153,8 +139,8 @@ fn get_random_map() -> Vec<Vec<TileType>> {
     map
 }
 
-fn cellular_automata_steps(map: &mut Vec<Vec<TileType>>, iterations: u32) {
-    let mut map2 = vec![vec![TileType::Dead; MAP_SIZE]; MAP_SIZE];
+fn cellular_automata_steps(map: &mut Array2D<TileType>, iterations: u32) {
+    let mut map2 = Array2D::<TileType>::with_elem(MAP_SIZE, MAP_SIZE, TileType::Dead);
 
     for _ in 0..iterations {
         for x in 2..MAP_SIZE - 2 {
@@ -165,25 +151,23 @@ fn cellular_automata_steps(map: &mut Vec<Vec<TileType>>, iterations: u32) {
                         if i == 0 && j == 0 {
                             continue;
                         }
-                        if let TileType::Alive(_) =
-                            map[(x as i32 + i) as usize][(y as i32 + j) as usize]
-                        {
+                        if let TileType::Alive(_) = map[[x + i, y + j]] {
                             neighbours += 1;
                         }
                     }
                 }
 
-                if map[x][y] == TileType::Dead {
+                if map[[x, y]] == TileType::Dead {
                     if neighbours > 4 {
-                        map2[x][y] = TileType::Alive(0);
+                        map2[[x, y]] = TileType::Alive(0);
                     } else {
-                        map2[x][y] = TileType::Dead;
+                        map2[[x, y]] = TileType::Dead;
                     }
                 } else {
                     if neighbours < 3 {
-                        map2[x][y] = TileType::Dead;
+                        map2[[x, y]] = TileType::Dead;
                     } else {
-                        map2[x][y] = TileType::Alive(0);
+                        map2[[x, y]] = TileType::Alive(0);
                     }
                 }
             }
@@ -193,9 +177,9 @@ fn cellular_automata_steps(map: &mut Vec<Vec<TileType>>, iterations: u32) {
     mem::swap(map, &mut map2);
 }
 
-fn flood_fill_from(map: &mut Vec<Vec<TileType>>, pos: (usize, usize), fill: usize) -> u32 {
+fn flood_fill_from(map: &mut Array2D<TileType>, pos: (i32, i32), fill: usize) -> u32 {
     let mut tiles = vec![];
-    if matches!(map[pos.0][pos.1], TileType::Alive(_)) {
+    if matches!(map[pos], TileType::Alive(_)) {
         tiles.push(pos);
     }
 
@@ -203,7 +187,7 @@ fn flood_fill_from(map: &mut Vec<Vec<TileType>>, pos: (usize, usize), fill: usiz
 
     while !tiles.is_empty() {
         let (x, y) = tiles.pop().unwrap();
-        map[x][y] = TileType::Alive(fill);
+        map[[x, y]] = TileType::Alive(fill);
         count += 1;
 
         for i in -1..=1i32 {
@@ -211,11 +195,10 @@ fn flood_fill_from(map: &mut Vec<Vec<TileType>>, pos: (usize, usize), fill: usiz
                 if i != 0 && j != 0 {
                     continue;
                 }
-                let new_x = (x as i32 + i) as usize;
-                let new_y = (y as i32 + j) as usize;
-                if let TileType::Alive(f) = map[new_x][new_y] {
+                let new = (x + i, y + j);
+                if let TileType::Alive(f) = map[new] {
                     if f != fill {
-                        tiles.push((new_x, new_y));
+                        tiles.push(new);
                     }
                 }
             }

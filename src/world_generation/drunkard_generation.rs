@@ -203,7 +203,6 @@ pub fn finish_drunkard(
 
     commands.remove_resource::<DrunkardMap>();
     commands.insert_resource(WorldMap {
-        world_size,
         entities: Array2D::from_vecs(tiles),
         tile_factory,
         tiles: Array2D::with_size(world_size.x, world_size.y),
