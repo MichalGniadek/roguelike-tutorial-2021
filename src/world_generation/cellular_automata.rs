@@ -5,7 +5,7 @@ use crate::{
     AppState,
 };
 use bevy::prelude::*;
-use rand::random;
+use rand::{prelude::SliceRandom, random, thread_rng};
 use std::mem;
 
 pub struct CellularAutomataPlugin;
@@ -36,73 +36,50 @@ fn cellular_automata(
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut app_state: ResMut<State<AppState>>,
 ) {
-    let mut tile_map;
-    let mut max_fill_number;
-    let mut max_fill_count;
-    loop {
-        tile_map = get_random_map();
+    let (tile_map, mut zone_entities) = loop {
+        let mut tile_map = get_random_map();
         cellular_automata_steps(&mut tile_map, ITERATIONS);
 
-        let mut current_fill_number = 1;
-        max_fill_number = 0;
-        max_fill_count = 0;
-        for x in 2..MAP_SIZE - 2 {
-            for y in 2..MAP_SIZE - 2 {
-                if tile_map[[x, y]] == TileType::Alive(0) {
-                    let count = flood_fill_from(&mut tile_map, (x, y), current_fill_number);
-
-                    if max_fill_count < count {
-                        max_fill_count = count;
-                        max_fill_number = current_fill_number;
-                    }
-
-                    current_fill_number += 1;
-                }
-            }
+        let size = select_largest_cave(&mut tile_map);
+        if size < 400 || size > 600 {
+            continue;
         }
 
-        if max_fill_count >= 400 && max_fill_count <= 600 {
-            break;
+        let zone_count = split_into_zones(&mut tile_map);
+        if zone_count < 5 {
+            continue;
         }
-    }
 
-    let mut spawned_player = false;
-    let mut entities = Array2D::<Vec<Entity>>::with_size(MAP_SIZE - 2, MAP_SIZE - 2);
+        break (
+            tile_map,
+            get_zone_entities(&mut commands, &asset_server, &mut materials, zone_count),
+        );
+    };
+
+    let mut entities = Array2D::with_size(MAP_SIZE - 2, MAP_SIZE - 2);
 
     let tile_factory = TileFactory::new(&asset_server, &mut materials);
     for x in 1..MAP_SIZE - 1 {
         for y in 1..MAP_SIZE - 1 {
             let mut tile = vec![];
 
-            if tile_map[[x, y]] == TileType::Alive(max_fill_number) {
+            if let TileType::Alive(zone) = tile_map[[x, y]] {
                 tile.push(tile_factory.floor(&mut commands, x - 1, y - 1));
 
-                // Spawn player on the first top-left floor
-                if !spawned_player {
-                    spawned_player = true;
-                    tile.push(
+                // Zones start at 1 so we have to substract
+                if let Some(e) = zone_entities.get_mut(zone - 1) {
+                    if let Some(e) = e.pop() {
                         commands
-                            .spawn_bundle(SpriteBundle {
-                                material: materials.add(ColorMaterial {
-                                    texture: Some(asset_server.load("hooded-figure.png")),
-                                    color: Color::hex("EDEDED").unwrap(),
-                                }),
-                                transform: Transform::from_xyz(0.0, 0.0, 1.0),
-                                ..Default::default()
-                            })
-                            .insert_bundle((
-                                Player,
-                                Initiative,
-                                GridPosition { x: x - 1, y: y - 1 },
-                            ))
-                            .id(),
-                    );
+                            .entity(e)
+                            .insert(GridPosition { x: x - 1, y: y - 1 });
+                        tile.push(e);
+                    }
                 }
             } else {
                 // Show wall only if it's adjencent to a floor
                 for i in -1..=1i32 {
                     for j in -1..=1i32 {
-                        if tile_map[[x + i, y + j]] == TileType::Alive(max_fill_number) {
+                        if let TileType::Alive(_) = tile_map[[x + i, y + j]] {
                             tile.push(tile_factory.wall(&mut commands, x - 1, y - 1));
                             break;
                         }
@@ -177,28 +154,41 @@ fn cellular_automata_steps(map: &mut Array2D<TileType>, iterations: u32) {
     mem::swap(map, &mut map2);
 }
 
-fn flood_fill_from(map: &mut Array2D<TileType>, pos: (i32, i32), fill: usize) -> u32 {
+fn flood_fill(
+    map: &mut Array2D<TileType>,
+    pos: (i32, i32),
+    fill: TileType,
+    distance: Option<u32>,
+) -> u32 {
     let mut tiles = vec![];
-    if matches!(map[pos], TileType::Alive(_)) {
-        tiles.push(pos);
+    if matches!(map[pos], TileType::Alive(_)) && map[pos] != fill {
+        tiles.push((pos, 0));
     }
 
     let mut count = 0;
 
     while !tiles.is_empty() {
-        let (x, y) = tiles.pop().unwrap();
-        map[[x, y]] = TileType::Alive(fill);
+        let ((x, y), dist) = tiles.pop().unwrap();
+
+        map[[x, y]] = fill;
         count += 1;
 
         for i in -1..=1i32 {
             for j in -1..=1i32 {
-                if i != 0 && j != 0 {
+                // No diagonals or the same tile
+                if (i != 0 && j != 0) || (i == 0 && j == 0) {
                     continue;
                 }
+
                 let new = (x + i, y + j);
-                if let TileType::Alive(f) = map[new] {
-                    if f != fill {
-                        tiles.push(new);
+
+                if matches!(map[new], TileType::Alive(_)) && map[new] != fill {
+                    if let Some(distance) = distance {
+                        if distance > dist {
+                            tiles.push((new, dist + 1));
+                        }
+                    } else {
+                        tiles.push((new, dist + 1));
                     }
                 }
             }
@@ -206,4 +196,115 @@ fn flood_fill_from(map: &mut Array2D<TileType>, pos: (i32, i32), fill: usize) ->
     }
 
     count
+}
+
+fn select_largest_cave(tile_map: &mut Array2D<TileType>) -> u32 {
+    let mut current_fill_number = 0;
+    let mut max_fill_number = 0;
+    let mut max_fill_count = 0;
+    for x in 2..MAP_SIZE - 2 {
+        for y in 2..MAP_SIZE - 2 {
+            if tile_map[[x, y]] == TileType::Alive(0) {
+                current_fill_number += 1;
+                let count =
+                    flood_fill(tile_map, (x, y), TileType::Alive(current_fill_number), None);
+
+                if max_fill_count < count {
+                    max_fill_count = count;
+                    max_fill_number = current_fill_number;
+                }
+            }
+        }
+    }
+
+    for x in 2..MAP_SIZE - 2 {
+        for y in 2..MAP_SIZE - 2 {
+            if let TileType::Alive(fill) = tile_map[[x, y]] {
+                if fill == 0 {
+                    continue;
+                } else if fill == max_fill_number {
+                    flood_fill(tile_map, (x, y), TileType::Alive(0), None);
+                } else {
+                    flood_fill(tile_map, (x, y), TileType::Dead, None);
+                }
+            }
+        }
+    }
+
+    max_fill_count
+}
+
+fn split_into_zones(tile_map: &mut Array2D<TileType>) -> usize {
+    let mut current_fill_number = 0;
+    for x in 2..MAP_SIZE - 2 {
+        for y in 2..MAP_SIZE - 2 {
+            if tile_map[[x, y]] == TileType::Alive(0) {
+                current_fill_number += 1;
+                flood_fill(
+                    tile_map,
+                    (x, y),
+                    TileType::Alive(current_fill_number),
+                    Some(15),
+                );
+            }
+        }
+    }
+    current_fill_number
+}
+
+fn get_zone_entities(
+    commands: &mut Commands,
+    asset_server: &Res<AssetServer>,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    zone_count: usize,
+) -> Vec<Vec<Entity>> {
+    let orcs = |commands: &mut Commands, materials: &mut ResMut<Assets<ColorMaterial>>| {
+        vec![
+            commands
+                .spawn_bundle(SpriteBundle {
+                    material: materials.add(ColorMaterial {
+                        texture: Some(asset_server.load("orc-head.png")),
+                        color: Color::hex("DA0037").unwrap(),
+                    }),
+                    transform: Transform::from_xyz(0.0, 0.0, 1.0),
+                    ..Default::default()
+                })
+                .id(),
+            commands
+                .spawn_bundle(SpriteBundle {
+                    material: materials.add(ColorMaterial {
+                        texture: Some(asset_server.load("orc-head.png")),
+                        color: Color::hex("DA0037").unwrap(),
+                    }),
+                    transform: Transform::from_xyz(0.0, 0.0, 1.0),
+                    ..Default::default()
+                })
+                .id(),
+        ]
+    };
+
+    let mut zone_entities = vec![
+        // Player
+        vec![commands
+            .spawn_bundle(SpriteBundle {
+                material: materials.add(ColorMaterial {
+                    texture: Some(asset_server.load("hooded-figure.png")),
+                    color: Color::hex("EDEDED").unwrap(),
+                }),
+                transform: Transform::from_xyz(0.0, 0.0, 1.0),
+                ..Default::default()
+            })
+            .insert_bundle((Player, Initiative))
+            .id()],
+        orcs(commands, materials),
+        orcs(commands, materials),
+        orcs(commands, materials),
+        orcs(commands, materials),
+    ];
+
+    assert!(zone_entities.len() <= zone_count);
+    zone_entities.resize(zone_count, vec![]);
+    zone_entities.shuffle(&mut thread_rng());
+
+    zone_entities
 }
