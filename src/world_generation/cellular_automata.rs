@@ -1,7 +1,7 @@
 use super::WorldGeneratorType;
 use crate::{
-    dungeon_crawl::{Initiative, Player, TurnState},
-    world_map::{Array2D, GridPosition, TileFactory, WorldMap},
+    dungeon_crawl::{Enemy, Initiative, Player, TurnState},
+    world_map::{Array2D, BlocksMovement, GridPosition, TileFactory, WorldMap},
     AppState,
 };
 use bevy::prelude::*;
@@ -269,6 +269,7 @@ fn get_zone_entities(
                     transform: Transform::from_xyz(0.0, 0.0, 1.0),
                     ..Default::default()
                 })
+                .insert_bundle((Enemy, BlocksMovement))
                 .id(),
             commands
                 .spawn_bundle(SpriteBundle {
@@ -279,6 +280,7 @@ fn get_zone_entities(
                     transform: Transform::from_xyz(0.0, 0.0, 1.0),
                     ..Default::default()
                 })
+                .insert_bundle((Enemy, BlocksMovement))
                 .id(),
         ]
     };

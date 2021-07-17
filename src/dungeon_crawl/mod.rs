@@ -43,6 +43,7 @@ impl Plugin for DungeonCrawlPlugin {
 }
 
 pub struct Player;
+pub struct Enemy;
 pub struct Initiative;
 
 fn update_world_map(
@@ -95,7 +96,7 @@ fn player_fov(
                 // Don't go through diagonal walls.
                 if let Some((prev_x, prev_y)) = previous {
                     if (world.tiles[[prev_x, y]] & world.tiles[[x, prev_y]])
-                        .contains(TileFlags::BLOCKS_MOVEMENT)
+                        .contains(TileFlags::BLOCKS_VISION)
                     {
                         break;
                     }
@@ -105,14 +106,14 @@ fn player_fov(
                 world.tiles[[x, y]] |= TileFlags::IN_VIEW;
 
                 // Remove artifacts
-                if !tile.contains(TileFlags::BLOCKS_MOVEMENT) {
+                if !tile.contains(TileFlags::BLOCKS_VISION) {
                     // Different direction depending in which quadrant we are in.
                     for (i, j) in [
                         ((x - position.x).signum(), 0),
                         (0, (y - position.y).signum()),
                     ] {
                         if let Some(neigh) = world.tiles.get_mut(x + i, y + j) {
-                            if neigh.contains(TileFlags::BLOCKS_MOVEMENT) {
+                            if neigh.contains(TileFlags::BLOCKS_VISION) {
                                 *neigh |= TileFlags::IN_VIEW;
                             }
                         }
@@ -199,6 +200,7 @@ fn update_position(
 
 fn player_control(
     mut query: Query<&mut GridPosition, (With<Player>, With<Initiative>)>,
+    enemies: Query<(), With<Enemy>>,
     world: Res<WorldMap>,
     keys: Res<Input<KeyCode>>,
     mut app_state: ResMut<State<AppState>>,
@@ -221,11 +223,22 @@ fn player_control(
         }
     }
 
-    if *position != new_pos && !world.tiles[new_pos].contains(TileFlags::BLOCKS_MOVEMENT) {
-        *position = new_pos;
-        app_state
-            .set(AppState::DungeonCrawl(TurnState::NewTurn))
-            .unwrap();
+    if *position != new_pos {
+        if world.tiles[new_pos].contains(TileFlags::BLOCKS_MOVEMENT) {
+            for entity in &world.entities[new_pos] {
+                if let Ok(()) = enemies.get(*entity) {
+                    println!("hit");
+                    app_state
+                        .set(AppState::DungeonCrawl(TurnState::NewTurn))
+                        .unwrap();
+                }
+            }
+        } else {
+            *position = new_pos;
+            app_state
+                .set(AppState::DungeonCrawl(TurnState::NewTurn))
+                .unwrap();
+        }
     }
 }
 
