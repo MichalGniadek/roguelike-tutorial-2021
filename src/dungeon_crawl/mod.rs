@@ -82,7 +82,7 @@ fn update_world_map(
 
 fn player_fov(
     player: Query<&GridPosition, (With<Player>, With<Initiative>)>,
-    mut visible: Query<(&mut Visible, &GridPosition)>,
+    mut visible: Query<(&mut Visible, &GridPosition, Option<&Tile>)>,
     mut tiles: Query<(&mut Handle<ColorMaterial>, &GridPosition), With<Tile>>,
     mut world: ResMut<WorldMap>,
 ) {
@@ -134,8 +134,12 @@ fn player_fov(
         }
     }
 
-    for (mut visible, pos) in visible.iter_mut() {
-        visible.is_visible = world.tiles[[pos.x, pos.y]].contains(TileFlags::EXPLORED);
+    for (mut visible, pos, tile) in visible.iter_mut() {
+        if let Some(_) = tile {
+            visible.is_visible = world.tiles[[pos.x, pos.y]].contains(TileFlags::EXPLORED);
+        } else {
+            visible.is_visible = world.tiles[[pos.x, pos.y]].contains(TileFlags::IN_VIEW);
+        }
     }
 
     for (mut mat, pos) in tiles.iter_mut() {
