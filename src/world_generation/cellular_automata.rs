@@ -1,6 +1,6 @@
 use super::WorldGeneratorType;
 use crate::{
-    dungeon_crawl::{Enemy, Initiative, Player, TurnState},
+    dungeon_crawl::{Enemy, Player, TurnState},
     world_map::{Array2D, BlocksMovement, GridPosition, TileFactory, WorldMap},
     AppState,
 };
@@ -296,7 +296,7 @@ fn get_zone_entities(
                 transform: Transform::from_xyz(0.0, 0.0, 1.0),
                 ..Default::default()
             })
-            .insert_bundle((Player, Initiative))
+            .insert_bundle((Player,))
             .id()],
         orcs(commands, materials),
         orcs(commands, materials),

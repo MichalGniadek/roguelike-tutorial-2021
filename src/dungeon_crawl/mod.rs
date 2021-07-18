@@ -2,7 +2,7 @@ use crate::{
     world_map::{BlocksMovement, BlocksVision, Grid, GridPosition, Tile, TileFlags, WorldMap},
     AppState,
 };
-use bevy::{prelude::*, render::camera::Camera};
+use bevy::{ecs::system::QuerySingleError, prelude::*, render::camera::Camera};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TurnState {
@@ -12,14 +12,21 @@ pub enum TurnState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
+    Wait,
     Move(Entity, GridPosition, GridPosition),
     Attack(Entity),
+}
+
+#[derive(Default)]
+pub struct InitiativeOrder {
+    order: Vec<Entity>,
+    current: usize,
 }
 
 pub struct DungeonCrawlPlugin;
 impl Plugin for DungeonCrawlPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app.add_event::<Action>();
+        app.add_event::<Action>().init_resource::<InitiativeOrder>();
 
         // New turn
         app.add_system_set(
@@ -27,6 +34,7 @@ impl Plugin for DungeonCrawlPlugin {
                 .with_system(update_position.system().before("camera"))
                 .with_system(camera_position.system().label("camera"))
                 .with_system(update_world_map.system())
+                .with_system(handle_initiative.system())
                 .with_system(
                     (|mut app_state: ResMut<State<AppState>>| {
                         app_state
@@ -45,6 +53,7 @@ impl Plugin for DungeonCrawlPlugin {
         app.add_system_set(
             SystemSet::on_update(AppState::DungeonCrawl(TurnState::DuringTurn))
                 .with_system(player_control.system().before("actions"))
+                .with_system(enemy_ai.system().before("actions"))
                 .with_system(handle_actions.system().label("actions")),
         );
     }
@@ -89,8 +98,32 @@ fn update_world_map(
     }
 }
 
+fn handle_initiative(
+    mut order: ResMut<InitiativeOrder>,
+    characters: Query<Entity, Or<(With<Player>, With<Enemy>)>>,
+    mut commands: Commands,
+) {
+    if let Some(e) = order.order.get(order.current) {
+        commands.entity(*e).remove::<Initiative>();
+    }
+
+    for c in characters.iter() {
+        if !order.order.contains(&c) {
+            order.order.push(c);
+        }
+    }
+
+    order.current += 1;
+    if order.order.len() > 0 {
+        order.current %= order.order.len();
+        commands
+            .entity(order.order[order.current])
+            .insert(Initiative);
+    }
+}
+
 fn player_fov(
-    player: Query<&GridPosition, (With<Player>, With<Initiative>)>,
+    player: Query<&GridPosition, With<Player>>,
     mut visible: Query<(&mut Visible, &GridPosition, Option<&Tile>)>,
     mut tiles: Query<(&mut Handle<ColorMaterial>, &GridPosition), With<Tile>>,
     mut world: ResMut<WorldMap>,
@@ -213,7 +246,11 @@ fn player_control(
     keys: Res<Input<KeyCode>>,
     mut actions: EventWriter<Action>,
 ) {
-    let (player_entity, position) = query.single_mut().unwrap();
+    let (player_entity, position) = match query.single_mut() {
+        Ok((e, pos)) => (e, pos),
+        Err(QuerySingleError::NoEntities(_)) => return,
+        Err(QuerySingleError::MultipleEntities(_)) => panic!(),
+    };
     let mut new_pos = position.clone();
 
     if keys.is_changed() {
@@ -239,6 +276,16 @@ fn player_control(
     }
 }
 
+fn enemy_ai(enemy: Query<(), (With<Enemy>, With<Initiative>)>, mut actions: EventWriter<Action>) {
+    let _enemy = match enemy.single() {
+        Ok(e) => e,
+        Err(QuerySingleError::NoEntities(_)) => return,
+        Err(QuerySingleError::MultipleEntities(_)) => panic!(),
+    };
+    println!("Gaaarh!");
+    actions.send(Action::Wait);
+}
+
 fn handle_actions(
     mut actions: EventReader<Action>,
     mut positions: Query<&mut GridPosition>,
@@ -249,6 +296,7 @@ fn handle_actions(
     for a in actions.iter() {
         handled_events = true;
         match a {
+            Action::Wait => {}
             Action::Move(entity, old_pos, new_pos) => {
                 let i = world.entities[*old_pos]
                     .iter()
