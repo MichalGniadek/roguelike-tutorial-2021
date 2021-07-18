@@ -6,7 +6,7 @@ use crate::{
 };
 use bevy::prelude::*;
 use rand::{prelude::SliceRandom, random, thread_rng};
-use std::mem;
+use std::{collections::VecDeque, mem};
 
 pub struct CellularAutomataPlugin;
 impl Plugin for CellularAutomataPlugin {
@@ -57,7 +57,6 @@ fn cellular_automata(
     };
 
     let mut entities = Array2D::with_size(MAP_SIZE - 2, MAP_SIZE - 2);
-
     let tile_factory = TileFactory::new(&asset_server, &mut materials);
     for x in 1..MAP_SIZE - 1 {
         for y in 1..MAP_SIZE - 1 {
@@ -66,7 +65,7 @@ fn cellular_automata(
             if let TileType::Alive(zone) = tile_map[[x, y]] {
                 tile.push(tile_factory.floor(&mut commands, x - 1, y - 1));
 
-                // Zones start at 1 so we have to substract
+                // Zones start at 1 so we have to substract one
                 if let Some(e) = zone_entities.get_mut(zone - 1) {
                     if let Some(e) = e.pop() {
                         commands
@@ -89,6 +88,11 @@ fn cellular_automata(
 
             entities[[x - 1, y - 1]] = tile;
         }
+    }
+
+    // Despawn unused enemies
+    for e in zone_entities.iter().flatten() {
+        commands.entity(*e).despawn();
     }
 
     commands.insert_resource(WorldMap {
@@ -160,15 +164,17 @@ fn flood_fill(
     fill: TileType,
     distance: Option<u32>,
 ) -> u32 {
-    let mut tiles = vec![];
-    if matches!(map[pos], TileType::Alive(_)) && map[pos] != fill {
-        tiles.push((pos, 0));
-    }
+    let mut tiles = VecDeque::new();
+    tiles.push_back((pos, 0));
 
     let mut count = 0;
 
     while !tiles.is_empty() {
-        let ((x, y), dist) = tiles.pop().unwrap();
+        let ((x, y), dist) = tiles.pop_front().unwrap();
+
+        if map[[x, y]] != TileType::Alive(0) {
+            continue;
+        }
 
         map[[x, y]] = fill;
         count += 1;
@@ -182,13 +188,13 @@ fn flood_fill(
 
                 let new = (x + i, y + j);
 
-                if matches!(map[new], TileType::Alive(_)) && map[new] != fill {
+                if map[new] == TileType::Alive(0) {
                     if let Some(distance) = distance {
                         if distance > dist {
-                            tiles.push((new, dist + 1));
+                            tiles.push_back((new, dist + 1));
                         }
                     } else {
-                        tiles.push((new, dist + 1));
+                        tiles.push_back((new, dist + 1));
                     }
                 }
             }
@@ -223,9 +229,9 @@ fn select_largest_cave(tile_map: &mut Array2D<TileType>) -> u32 {
                 if fill == 0 {
                     continue;
                 } else if fill == max_fill_number {
-                    flood_fill(tile_map, (x, y), TileType::Alive(0), None);
+                    tile_map[[x, y]] = TileType::Alive(0);
                 } else {
-                    flood_fill(tile_map, (x, y), TileType::Dead, None);
+                    tile_map[[x, y]] = TileType::Dead;
                 }
             }
         }
@@ -244,7 +250,7 @@ fn split_into_zones(tile_map: &mut Array2D<TileType>) -> usize {
                     tile_map,
                     (x, y),
                     TileType::Alive(current_fill_number),
-                    Some(15),
+                    Some(10),
                 );
             }
         }
