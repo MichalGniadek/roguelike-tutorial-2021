@@ -1,5 +1,4 @@
 use crate::{
-    world_generation::WorldGeneratorType,
     world_map::{BlocksMovement, BlocksVision, Grid, GridPosition, Tile, TileFlags, WorldMap},
     AppState,
 };
@@ -11,9 +10,17 @@ pub enum TurnState {
     DuringTurn,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    Move(Entity, GridPosition, GridPosition),
+    Attack(Entity),
+}
+
 pub struct DungeonCrawlPlugin;
 impl Plugin for DungeonCrawlPlugin {
     fn build(&self, app: &mut AppBuilder) {
+        app.add_event::<Action>();
+
         // New turn
         app.add_system_set(
             SystemSet::on_enter(AppState::DungeonCrawl(TurnState::NewTurn))
@@ -37,7 +44,8 @@ impl Plugin for DungeonCrawlPlugin {
         );
         app.add_system_set(
             SystemSet::on_update(AppState::DungeonCrawl(TurnState::DuringTurn))
-                .with_system(player_control.system()),
+                .with_system(player_control.system().before("actions"))
+                .with_system(handle_actions.system().label("actions")),
         );
     }
 }
@@ -199,13 +207,13 @@ fn update_position(
 }
 
 fn player_control(
-    mut query: Query<&mut GridPosition, (With<Player>, With<Initiative>)>,
+    mut query: Query<(Entity, &mut GridPosition), (With<Player>, With<Initiative>)>,
     enemies: Query<(), With<Enemy>>,
     world: Res<WorldMap>,
     keys: Res<Input<KeyCode>>,
-    mut app_state: ResMut<State<AppState>>,
+    mut actions: EventWriter<Action>,
 ) {
-    let mut position = query.single_mut().unwrap();
+    let (player_entity, position) = query.single_mut().unwrap();
     let mut new_pos = position.clone();
 
     if keys.is_changed() {
@@ -214,11 +222,6 @@ fn player_control(
             Some(KeyCode::Down | KeyCode::S) => new_pos.y -= 1,
             Some(KeyCode::Left | KeyCode::A) => new_pos.x -= 1,
             Some(KeyCode::Right | KeyCode::D) => new_pos.x += 1,
-            Some(KeyCode::R) => app_state
-                .set(AppState::WorldGeneration(
-                    WorldGeneratorType::CellularAutomata,
-                ))
-                .unwrap(),
             _ => {}
         }
     }
@@ -227,18 +230,45 @@ fn player_control(
         if world.tiles[new_pos].contains(TileFlags::BLOCKS_MOVEMENT) {
             for entity in &world.entities[new_pos] {
                 if let Ok(()) = enemies.get(*entity) {
-                    println!("hit");
-                    app_state
-                        .set(AppState::DungeonCrawl(TurnState::NewTurn))
-                        .unwrap();
+                    actions.send(Action::Attack(*entity));
                 }
             }
         } else {
-            *position = new_pos;
-            app_state
-                .set(AppState::DungeonCrawl(TurnState::NewTurn))
-                .unwrap();
+            actions.send(Action::Move(player_entity, *position, new_pos));
         }
+    }
+}
+
+fn handle_actions(
+    mut actions: EventReader<Action>,
+    mut positions: Query<&mut GridPosition>,
+    mut world: ResMut<WorldMap>,
+    mut app_state: ResMut<State<AppState>>,
+) {
+    let mut handled_events = false;
+    for a in actions.iter() {
+        handled_events = true;
+        match a {
+            Action::Move(entity, old_pos, new_pos) => {
+                let i = world.entities[*old_pos]
+                    .iter()
+                    .position(|x| x == entity)
+                    .unwrap();
+                world.entities[*old_pos].swap_remove(i);
+                world.entities[*new_pos].push(*entity);
+
+                if let Ok(mut pos) = positions.get_mut(*entity) {
+                    *pos = *new_pos;
+                }
+            }
+            Action::Attack(_) => println!("attack"),
+        }
+    }
+
+    if handled_events {
+        app_state
+            .set(AppState::DungeonCrawl(TurnState::NewTurn))
+            .unwrap();
     }
 }
 
