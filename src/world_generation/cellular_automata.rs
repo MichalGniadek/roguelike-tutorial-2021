@@ -302,7 +302,7 @@ fn get_zone_entities(
                 transform: Transform::from_xyz(0.0, 0.0, 1.0),
                 ..Default::default()
             })
-            .insert_bundle((Player,))
+            .insert_bundle((Player, Health(5)))
             .id()],
         orcs(commands, materials),
         orcs(commands, materials),

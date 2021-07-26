@@ -1,5 +1,7 @@
 use super::{EnemyAI, Initiative, Player};
-use crate::world_map::{BlocksMovement, BlocksVision, Grid, GridPosition, TileFlags, WorldMap};
+use crate::world_map::{
+    BlocksMovement, BlocksVision, Grid, GridPosition, Tile, TileFlags, WorldMap,
+};
 use bevy::{prelude::*, render::camera::Camera};
 use std::collections::VecDeque;
 
@@ -22,7 +24,10 @@ pub fn camera_position(
         Query<&mut Transform, With<Camera>>,
     )>,
 ) {
-    let mut position = query.q0_mut().single_mut().unwrap().clone();
+    let mut position = match query.q0_mut().single_mut() {
+        Ok(position) => position.clone(),
+        Err(_) => return,
+    };
     let mut camera = query.q1_mut().single_mut().unwrap();
     position.translation.z = camera.translation.z;
     *camera = position;
@@ -30,6 +35,7 @@ pub fn camera_position(
 
 pub fn update_world_map(
     mut world: ResMut<WorldMap>,
+    t: Query<(&Tile, &BlocksMovement)>,
     m: Query<&BlocksMovement>,
     v: Query<&BlocksVision>,
 ) {
@@ -47,6 +53,12 @@ pub fn update_world_map(
                 .any(|e| matches!(m.get(*e), Ok(&BlocksMovement)))
             {
                 world.tiles[[x, y]] |= TileFlags::BLOCKS_MOVEMENT;
+            }
+            if world.entities[[x, y]]
+                .iter()
+                .any(|e| matches!(t.get(*e), Ok((&Tile, &BlocksMovement))))
+            {
+                world.tiles[[x, y]] |= TileFlags::BLOCKS_PATHFINDING;
             }
         }
     }

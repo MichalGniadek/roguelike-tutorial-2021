@@ -1,12 +1,13 @@
 use bevy::{math::ivec2, prelude::*};
 use bitflags::bitflags;
+use pathfinding::directed::astar;
 use std::ops::{Index, IndexMut};
 
 pub struct Grid {
     pub cell_size: IVec2,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GridPosition {
     pub x: i32,
     pub y: i32,
@@ -125,6 +126,7 @@ bitflags! {
         const BLOCKS_VISION = 0b00000010;
         const IN_VIEW = 0b00000100;
         const EXPLORED = 0b00001000;
+        const BLOCKS_PATHFINDING = 0b00010000;
     }
 }
 
@@ -139,6 +141,38 @@ pub struct WorldMap {
     pub tile_factory: TileFactory,
 
     pub tiles: Array2D<TileFlags>,
+}
+
+impl WorldMap {
+    pub fn pathfind(
+        &self,
+        start: GridPosition,
+        end: GridPosition,
+    ) -> Option<(Vec<GridPosition>, i32)> {
+        astar::astar(
+            &start,
+            |&GridPosition { x, y }| {
+                let mut v = vec![];
+                for (i, j) in [(0, 1), (1, 0), (-1, 0), (0, -1)] {
+                    if let Some(t) = self.tiles.get(x + i, y + j) {
+                        if !t.contains(TileFlags::BLOCKS_PATHFINDING) {
+                            let cost = if t.contains(TileFlags::BLOCKS_MOVEMENT) {
+                                5
+                            } else {
+                                1
+                            };
+                            v.push((GridPosition { x: x + i, y: y + j }, cost));
+                        }
+                    }
+                }
+                v
+            },
+            |&GridPosition { x, y }| {
+                f32::sqrt(((end.x - x).pow(2) + (end.y - y).pow(2)) as f32).floor() as i32
+            },
+            |&pos| pos == end,
+        )
+    }
 }
 
 pub struct TileFactory {

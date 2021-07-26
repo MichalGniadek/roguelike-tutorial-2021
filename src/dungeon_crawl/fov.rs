@@ -8,7 +8,10 @@ pub fn player_fov(
     mut tiles: Query<(&mut Handle<ColorMaterial>, &GridPosition), With<Tile>>,
     mut world: ResMut<WorldMap>,
 ) {
-    let position = *player.single().unwrap();
+    let position = match player.single() {
+        Ok(position) => position.clone(),
+        Err(_) => return,
+    };
 
     for end in fov_circle(position.x, position.y, 4) {
         let mut previous = None;

@@ -6,7 +6,7 @@ use crate::{
     world_map::{GridPosition, TileFlags, WorldMap},
     AppState,
 };
-use bevy::{ecs::system::QuerySingleError, prelude::*};
+use bevy::{app::AppExit, ecs::system::QuerySingleError, prelude::*};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TurnState {
@@ -77,13 +77,13 @@ pub struct Initiative;
 pub struct Health(pub i32);
 
 fn player_control(
-    mut query: Query<(Entity, &mut GridPosition), (With<Player>, With<Initiative>)>,
+    query: Query<(Entity, &GridPosition), (With<Player>, With<Initiative>)>,
     enemies: Query<(), With<Health>>,
     world: Res<WorldMap>,
     keys: Res<Input<KeyCode>>,
     mut actions: EventWriter<Action>,
 ) {
-    let (player_entity, position) = match query.single_mut() {
+    let (player_entity, position) = match query.single() {
         Ok((e, pos)) => (e, pos),
         Err(QuerySingleError::NoEntities(_)) => return,
         Err(QuerySingleError::MultipleEntities(_)) => panic!(),
@@ -114,15 +114,33 @@ fn player_control(
 }
 
 fn enemy_ai(
-    enemy: Query<Entity, (With<EnemyAI>, With<Initiative>)>,
+    enemy: Query<(Entity, &GridPosition), (With<EnemyAI>, With<Initiative>)>,
+    player: Query<(Entity, &GridPosition), With<Player>>,
+    world: Res<WorldMap>,
     mut actions: EventWriter<Action>,
 ) {
-    let enemy = match enemy.single() {
+    let (enemy, position) = match enemy.single() {
         Ok(e) => e,
         Err(QuerySingleError::NoEntities(_)) => return,
         Err(QuerySingleError::MultipleEntities(_)) => panic!(),
     };
-    actions.send(Action::Wait(enemy));
+
+    if world.tiles[*position].contains(TileFlags::IN_VIEW) {
+        let (player, player_pos) = player.single().unwrap();
+        if let Some((path, _)) = world.pathfind(*position, *player_pos) {
+            if path[1] == *player_pos {
+                actions.send(Action::Attack(enemy, player, 1));
+            } else if !world.tiles[path[1]].contains(TileFlags::BLOCKS_MOVEMENT) {
+                actions.send(Action::Move(enemy, *position, path[1]));
+            } else {
+                actions.send(Action::Wait(enemy));
+            }
+        } else {
+            actions.send(Action::Wait(enemy));
+        }
+    } else {
+        actions.send(Action::Wait(enemy));
+    }
 }
 
 fn handle_actions(
@@ -165,8 +183,15 @@ fn handle_kills(
     mut order: ResMut<InitiativeOrder>,
     mut positions: Query<&mut GridPosition>,
     mut world: ResMut<WorldMap>,
+    player: Query<(), With<Player>>,
+    mut temp_app_exit_events: EventWriter<AppExit>,
 ) {
     for entity in kills.iter().map(|k| k.0) {
+        if player.get(entity).is_ok() {
+            temp_app_exit_events.send(AppExit);
+            return;
+        }
+
         commands.entity(entity).despawn();
 
         let pos = positions.get_mut(entity).unwrap();
