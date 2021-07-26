@@ -1,6 +1,7 @@
-use super::{Enemy, Initiative, InitiativeOrder, Player};
+use super::{EnemyAI, Initiative, Player};
 use crate::world_map::{BlocksMovement, BlocksVision, Grid, GridPosition, TileFlags, WorldMap};
 use bevy::{prelude::*, render::camera::Camera};
+use std::collections::VecDeque;
 
 pub fn update_position(
     mut query: Query<(&mut Transform, &GridPosition), Changed<GridPosition>>,
@@ -62,26 +63,27 @@ pub fn update_world_map(
     }
 }
 
+#[derive(Default)]
+pub struct InitiativeOrder(pub VecDeque<Entity>);
+
 pub fn handle_initiative(
     mut order: ResMut<InitiativeOrder>,
-    characters: Query<Entity, Or<(With<Player>, With<Enemy>)>>,
+    curr: Query<Entity, With<Initiative>>,
+    characters: Query<Entity, Or<(With<Player>, With<EnemyAI>)>>,
     mut commands: Commands,
 ) {
-    if let Some(e) = order.order.get(order.current) {
-        commands.entity(*e).remove::<Initiative>();
+    if let Ok(entity) = curr.single() {
+        commands.entity(entity).remove::<Initiative>();
     }
 
     for c in characters.iter() {
-        if !order.order.contains(&c) {
-            order.order.push(c);
+        if !order.0.contains(&c) {
+            order.0.push_back(c);
         }
     }
 
-    order.current += 1;
-    if order.order.len() > 0 {
-        order.current %= order.order.len();
-        commands
-            .entity(order.order[order.current])
-            .insert(Initiative);
+    if let Some(entity) = order.0.pop_front() {
+        commands.entity(entity).insert(Initiative);
+        order.0.push_back(entity);
     }
 }

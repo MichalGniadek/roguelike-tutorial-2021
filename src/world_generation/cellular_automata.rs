@@ -1,6 +1,6 @@
 use super::WorldGeneratorType;
 use crate::{
-    dungeon_crawl::{Enemy, Player, TurnState},
+    dungeon_crawl::{EnemyAI, Health, Player, TurnState},
     world_map::{Array2D, BlocksMovement, GridPosition, TileFactory, WorldMap},
     AppState,
 };
@@ -275,7 +275,7 @@ fn get_zone_entities(
                     transform: Transform::from_xyz(0.0, 0.0, 1.0),
                     ..Default::default()
                 })
-                .insert_bundle((Enemy, BlocksMovement))
+                .insert_bundle((EnemyAI, BlocksMovement, Health(3)))
                 .id(),
             commands
                 .spawn_bundle(SpriteBundle {
@@ -286,7 +286,7 @@ fn get_zone_entities(
                     transform: Transform::from_xyz(0.0, 0.0, 1.0),
                     ..Default::default()
                 })
-                .insert_bundle((Enemy, BlocksMovement))
+                .insert_bundle((EnemyAI, BlocksMovement, Health(3)))
                 .id(),
         ]
     };
