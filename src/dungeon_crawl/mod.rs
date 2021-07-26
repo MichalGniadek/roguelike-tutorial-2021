@@ -28,33 +28,27 @@ impl Plugin for DungeonCrawlPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.add_event::<Action>().init_resource::<InitiativeOrder>();
 
-        // New turn
         app.add_system_set(
             SystemSet::on_enter(AppState::DungeonCrawl(TurnState::NewTurn))
                 .with_system(update_position.system().before("camera"))
                 .with_system(camera_position.system().label("camera"))
-                .with_system(update_world_map.system())
+                .with_system(update_world_map.system().label("update_world_map"))
                 .with_system(handle_initiative.system())
+                .with_system(player_fov.system().before("update_world_map"))
                 .with_system(
                     (|mut app_state: ResMut<State<AppState>>| {
-                        app_state
-                            .set(AppState::DungeonCrawl(TurnState::DuringTurn))
-                            .unwrap();
+                        let _ = app_state.set(AppState::DungeonCrawl(TurnState::DuringTurn));
                     })
                     .system(),
                 ),
         );
 
-        // During turn
-        app.add_system_set(
-            SystemSet::on_enter(AppState::DungeonCrawl(TurnState::DuringTurn))
-                .with_system(player_fov.system()),
-        );
         app.add_system_set(
             SystemSet::on_update(AppState::DungeonCrawl(TurnState::DuringTurn))
                 .with_system(player_control.system().before("actions"))
                 .with_system(enemy_ai.system().before("actions"))
-                .with_system(handle_actions.system().label("actions")),
+                .with_system(handle_actions.system().label("actions"))
+                .with_system(end_turn.system().label("actions")),
         );
     }
 }
@@ -282,7 +276,6 @@ fn enemy_ai(enemy: Query<(), (With<Enemy>, With<Initiative>)>, mut actions: Even
         Err(QuerySingleError::NoEntities(_)) => return,
         Err(QuerySingleError::MultipleEntities(_)) => panic!(),
     };
-    println!("Gaaarh!");
     actions.send(Action::Wait);
 }
 
@@ -292,11 +285,11 @@ fn handle_actions(
     mut world: ResMut<WorldMap>,
     mut app_state: ResMut<State<AppState>>,
 ) {
-    let mut handled_events = false;
     for a in actions.iter() {
-        handled_events = true;
         match a {
-            Action::Wait => {}
+            Action::Wait => {
+                println!("Gaaarh!");
+            }
             Action::Move(entity, old_pos, new_pos) => {
                 let i = world.entities[*old_pos]
                     .iter()
@@ -312,8 +305,10 @@ fn handle_actions(
             Action::Attack(_) => println!("attack"),
         }
     }
+}
 
-    if handled_events {
+fn end_turn(mut actions: EventReader<Action>, mut app_state: ResMut<State<AppState>>) {
+    if actions.iter().count() != 0 {
         app_state
             .set(AppState::DungeonCrawl(TurnState::NewTurn))
             .unwrap();
@@ -331,10 +326,3 @@ fn camera_position(
     position.translation.z = camera.translation.z;
     *camera = position;
 }
-
-// fn cleanup_play(query: Query<Entity, With<GridPosition>>, mut commands: Commands) {
-//     for e in query.iter() {
-//         commands.entity(e).despawn();
-//     }
-//     commands.remove_resource::<WorldMap>();
-// }
