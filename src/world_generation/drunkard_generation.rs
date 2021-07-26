@@ -152,7 +152,7 @@ pub fn drunkard_walk(
 
     if drunkards.iter_mut().len() == 0 {
         app_state
-            .set(AppState::DungeonCrawl(TurnState::NewTurn))
+            .set(AppState::DungeonCrawl(TurnState::Setup))
             .unwrap();
     }
 }

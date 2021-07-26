@@ -102,7 +102,7 @@ fn cellular_automata(
     });
 
     app_state
-        .set(AppState::DungeonCrawl(TurnState::NewTurn))
+        .set(AppState::DungeonCrawl(TurnState::Setup))
         .unwrap();
 }
 
