@@ -1,8 +1,10 @@
 mod fov;
 mod setup;
+mod ui;
 
 use self::setup::InitiativeOrder;
 use crate::{
+    dungeon_crawl::ui::LogMessage,
     world_map::{GridPosition, TileFlags, WorldMap},
     AppState,
 };
@@ -29,6 +31,7 @@ impl Plugin for DungeonCrawlPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.add_event::<Action>()
             .add_event::<Kill>()
+            .add_event::<LogMessage>()
             .init_resource::<InitiativeOrder>();
 
         use fov::*;
@@ -67,14 +70,38 @@ impl Plugin for DungeonCrawlPlugin {
                 .with_system(handle_kills.system())
                 .with_system(end_turn.system()),
         );
+        app.add_system_set(
+            SystemSet::on_update(AppState::DungeonCrawl(TurnState::Turn))
+                .with_system(ui::update_health.system())
+                .with_system(ui::update_log.system())
+                .with_system(ui::update_details.system()),
+        );
     }
 }
 
 pub struct Player;
 pub struct EnemyAI;
 pub struct Initiative;
+pub struct Name(pub String);
 
-pub struct Health(pub i32);
+impl Name {
+    pub fn capitalized(&self) -> String {
+        let mut chars = self.0.chars();
+        let first = chars.next().unwrap().to_uppercase();
+        format!("{}{}", first.collect::<String>(), chars.collect::<String>())
+    }
+}
+
+pub struct Health {
+    pub current: i32,
+    pub max: i32,
+}
+
+impl Health {
+    pub fn new(current: i32, max: i32) -> Self {
+        Health { current, max }
+    }
+}
 
 fn player_control(
     query: Query<(Entity, &GridPosition), (With<Player>, With<Initiative>)>,
@@ -149,6 +176,8 @@ fn handle_actions(
     mut healthy: Query<&mut Health>,
     mut world: ResMut<WorldMap>,
     mut kills: EventWriter<Kill>,
+    names: Query<&Name>,
+    mut log: EventWriter<LogMessage>,
 ) {
     for a in actions.iter() {
         match a {
@@ -165,8 +194,15 @@ fn handle_actions(
                     *pos = *new_pos;
                 }
             }
-            Action::Attack(_, attackee, damage) => {
-                let health = &mut healthy.get_mut(*attackee).unwrap().0;
+            Action::Attack(attacker, attackee, damage) => {
+                log.send(LogMessage(format!(
+                    "{} attacks {}, dealing {} damage!",
+                    names.get(*attacker).unwrap().capitalized(),
+                    names.get(*attackee).unwrap().0,
+                    damage
+                )));
+
+                let health = &mut healthy.get_mut(*attackee).unwrap().current;
                 *health -= damage;
 
                 if *health == 0 {
@@ -185,8 +221,15 @@ fn handle_kills(
     mut world: ResMut<WorldMap>,
     player: Query<(), With<Player>>,
     mut temp_app_exit_events: EventWriter<AppExit>,
+    names: Query<&Name>,
+    mut log: EventWriter<LogMessage>,
 ) {
     for entity in kills.iter().map(|k| k.0) {
+        log.send(LogMessage(format!(
+            "{} died!",
+            names.get(entity).unwrap().capitalized()
+        )));
+
         if player.get(entity).is_ok() {
             temp_app_exit_events.send(AppExit);
             return;

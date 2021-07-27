@@ -1,6 +1,6 @@
 use super::WorldGeneratorType;
 use crate::{
-    dungeon_crawl::{EnemyAI, Health, Player, TurnState},
+    dungeon_crawl::{EnemyAI, Health, Name, Player, TurnState},
     world_map::{Array2D, BlocksMovement, GridPosition, TileFactory, WorldMap},
     AppState,
 };
@@ -76,11 +76,11 @@ fn cellular_automata(
                 }
             } else {
                 // Show wall only if it's adjencent to a floor
-                for i in -1..=1i32 {
+                'finish: for i in -1..=1i32 {
                     for j in -1..=1i32 {
                         if let TileType::Alive(_) = tile_map[[x + i, y + j]] {
                             tile.push(tile_factory.wall(&mut commands, x - 1, y - 1));
-                            break;
+                            break 'finish;
                         }
                     }
                 }
@@ -275,7 +275,12 @@ fn get_zone_entities(
                     transform: Transform::from_xyz(0.0, 0.0, 1.0),
                     ..Default::default()
                 })
-                .insert_bundle((EnemyAI, BlocksMovement, Health(3)))
+                .insert_bundle((
+                    EnemyAI,
+                    BlocksMovement,
+                    Health::new(3, 3),
+                    Name(String::from("orc")),
+                ))
                 .id(),
             commands
                 .spawn_bundle(SpriteBundle {
@@ -286,7 +291,12 @@ fn get_zone_entities(
                     transform: Transform::from_xyz(0.0, 0.0, 1.0),
                     ..Default::default()
                 })
-                .insert_bundle((EnemyAI, BlocksMovement, Health(3)))
+                .insert_bundle((
+                    EnemyAI,
+                    BlocksMovement,
+                    Health::new(3, 3),
+                    Name(String::from("orc")),
+                ))
                 .id(),
         ]
     };
@@ -302,7 +312,7 @@ fn get_zone_entities(
                 transform: Transform::from_xyz(0.0, 0.0, 1.0),
                 ..Default::default()
             })
-            .insert_bundle((Player, Health(5)))
+            .insert_bundle((Player, Health::new(5, 5), Name(String::from("player"))))
             .id()],
         orcs(commands, materials),
         orcs(commands, materials),

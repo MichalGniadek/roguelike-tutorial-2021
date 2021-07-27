@@ -1,3 +1,4 @@
+use crate::dungeon_crawl::Name;
 use bevy::{math::ivec2, prelude::*};
 use bitflags::bitflags;
 use pathfinding::directed::astar;
@@ -103,6 +104,20 @@ impl<T> Index<(i32, i32)> for Array2D<T> {
 impl<T> IndexMut<(i32, i32)> for Array2D<T> {
     fn index_mut(&mut self, index: (i32, i32)) -> &mut Self::Output {
         &mut self.elems[index.0 as usize][index.1 as usize]
+    }
+}
+
+impl<T> Index<IVec2> for Array2D<T> {
+    type Output = T;
+
+    fn index(&self, index: IVec2) -> &Self::Output {
+        &self.elems[index.x as usize][index.y as usize]
+    }
+}
+
+impl<T> IndexMut<IVec2> for Array2D<T> {
+    fn index_mut(&mut self, index: IVec2) -> &mut Self::Output {
+        &mut self.elems[index.x as usize][index.y as usize]
     }
 }
 
@@ -214,7 +229,13 @@ impl TileFactory {
                 material: self.explored_wall_material.clone(),
                 ..Default::default()
             })
-            .insert_bundle((Tile, GridPosition { x, y }, BlocksMovement, BlocksVision))
+            .insert_bundle((
+                Tile,
+                GridPosition { x, y },
+                BlocksMovement,
+                BlocksVision,
+                Name(String::from("wall")),
+            ))
             .id()
     }
 
@@ -224,7 +245,7 @@ impl TileFactory {
                 material: self.explored_floor_material.clone(),
                 ..Default::default()
             })
-            .insert_bundle((Tile, GridPosition { x, y }))
+            .insert_bundle((Tile, GridPosition { x, y }, Name(String::from("floor"))))
             .id()
     }
 }
