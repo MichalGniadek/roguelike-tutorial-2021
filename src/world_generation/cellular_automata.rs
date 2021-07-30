@@ -1,7 +1,7 @@
-use super::WorldGeneratorType;
 use crate::{
-    dungeon_crawl::{EnemyAI, Health, Name, Player, TurnState},
-    world_map::{Array2D, BlocksMovement, GridPosition, TileFactory, WorldMap},
+    bundles::{EnemyBundle, ItemBundle, PlayerBundle},
+    dungeon_crawl::TurnState,
+    world_map::{Array2D, GridPosition, TileFactory, WorldMap},
     AppState,
 };
 use bevy::prelude::*;
@@ -12,10 +12,7 @@ pub struct CellularAutomataPlugin;
 impl Plugin for CellularAutomataPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.add_system_set(
-            SystemSet::on_enter(AppState::WorldGeneration(
-                WorldGeneratorType::CellularAutomata,
-            ))
-            .with_system(cellular_automata.system()),
+            SystemSet::on_enter(AppState::WorldGeneration).with_system(cellular_automata.system()),
         );
     }
 }
@@ -264,60 +261,48 @@ fn get_zone_entities(
     materials: &mut ResMut<Assets<ColorMaterial>>,
     zone_count: usize,
 ) -> Vec<Vec<Entity>> {
-    let orcs = |commands: &mut Commands, materials: &mut ResMut<Assets<ColorMaterial>>| {
+    let mut zone_entities = vec![
+        vec![commands
+            .spawn_bundle(PlayerBundle::new(asset_server, materials))
+            .id()],
         vec![
             commands
-                .spawn_bundle(SpriteBundle {
-                    material: materials.add(ColorMaterial {
-                        texture: Some(asset_server.load("orc-head.png")),
-                        color: Color::hex("DA0037").unwrap(),
-                    }),
-                    transform: Transform::from_xyz(0.0, 0.0, 1.0),
-                    ..Default::default()
-                })
-                .insert_bundle((
-                    EnemyAI,
-                    BlocksMovement,
-                    Health::new(3, 3),
-                    Name(String::from("orc")),
-                ))
+                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
                 .id(),
             commands
-                .spawn_bundle(SpriteBundle {
-                    material: materials.add(ColorMaterial {
-                        texture: Some(asset_server.load("orc-head.png")),
-                        color: Color::hex("DA0037").unwrap(),
-                    }),
-                    transform: Transform::from_xyz(0.0, 0.0, 1.0),
-                    ..Default::default()
-                })
-                .insert_bundle((
-                    EnemyAI,
-                    BlocksMovement,
-                    Health::new(3, 3),
-                    Name(String::from("orc")),
-                ))
+                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
                 .id(),
-        ]
-    };
-
-    let mut zone_entities = vec![
-        // Player
-        vec![commands
-            .spawn_bundle(SpriteBundle {
-                material: materials.add(ColorMaterial {
-                    texture: Some(asset_server.load("hooded-figure.png")),
-                    color: Color::hex("EDEDED").unwrap(),
-                }),
-                transform: Transform::from_xyz(0.0, 0.0, 1.0),
-                ..Default::default()
-            })
-            .insert_bundle((Player, Health::new(5, 5), Name(String::from("player"))))
-            .id()],
-        orcs(commands, materials),
-        orcs(commands, materials),
-        orcs(commands, materials),
-        orcs(commands, materials),
+            commands
+                .spawn_bundle(ItemBundle::health_potion(asset_server, materials))
+                .id(),
+        ],
+        vec![
+            commands
+                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
+                .id(),
+            commands
+                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
+                .id(),
+        ],
+        vec![
+            commands
+                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
+                .id(),
+            commands
+                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
+                .id(),
+            commands
+                .spawn_bundle(ItemBundle::health_potion(asset_server, materials))
+                .id(),
+        ],
+        vec![
+            commands
+                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
+                .id(),
+            commands
+                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
+                .id(),
+        ],
     ];
 
     assert!(zone_entities.len() <= zone_count);

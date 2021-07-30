@@ -1,17 +1,17 @@
 #![feature(iter_intersperse)]
 
+mod bundles;
 mod dungeon_crawl;
 mod world_generation;
 mod world_map;
 
 use bevy::prelude::*;
 use dungeon_crawl::TurnState;
-use world_generation::WorldGeneratorType;
 use world_map::Grid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AppState {
-    WorldGeneration(WorldGeneratorType),
+    WorldGeneration,
     DungeonCrawl(TurnState),
 }
 
@@ -49,9 +49,7 @@ fn main() {
     app.add_system(bevy::input::system::exit_on_esc_system.system())
         .add_plugin(dungeon_crawl::DungeonCrawlPlugin)
         .add_plugins(world_generation::WorldGenerationPlugins)
-        .add_state(AppState::WorldGeneration(
-            WorldGeneratorType::CellularAutomata,
-        ));
+        .add_state(AppState::WorldGeneration);
 
     app.add_startup_system(ui_setup.system());
 

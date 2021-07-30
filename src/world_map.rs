@@ -42,7 +42,7 @@ impl<T> Array2D<T> {
         }
     }
 
-    pub fn from_vecs(elems: Vec<Vec<T>>) -> Self {
+    pub fn _from_vecs(elems: Vec<Vec<T>>) -> Self {
         Self { elems }
     }
 

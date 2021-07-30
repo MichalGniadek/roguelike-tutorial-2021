@@ -79,10 +79,15 @@ impl Plugin for DungeonCrawlPlugin {
     }
 }
 
-pub struct Player;
+pub struct Player {
+    pub inventory: [Option<Entity>; 5],
+}
 pub struct EnemyAI;
 pub struct Initiative;
 pub struct Name(pub String);
+pub enum Item {
+    HealthPotion(i32),
+}
 
 impl Name {
     pub fn capitalized(&self) -> String {
