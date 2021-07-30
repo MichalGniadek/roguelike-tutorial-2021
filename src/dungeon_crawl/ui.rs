@@ -45,7 +45,8 @@ pub fn update_log(
 
 pub fn update_details(
     mut text: Query<&mut Text, With<ui::Details>>,
-    name: Query<&Name>,
+    names: Query<&Name>,
+    health: Query<&Health>,
     world: Res<WorldMap>,
     windows: Res<Windows>,
     camera: Query<(&Transform, &OrthographicProjection), (With<Camera>, Without<ui::Camera>)>,
@@ -64,14 +65,20 @@ pub fn update_details(
         if let Some(tile) = world.tiles.get(grid_pos.x, grid_pos.y) {
             if tile.contains(TileFlags::IN_VIEW) {
                 if let Some(entities) = world.entities.get(grid_pos.x, grid_pos.y) {
-                    let mut names = entities
-                        .iter()
-                        .map(|e| name.get(*e).unwrap().capitalized())
-                        .collect::<Vec<_>>();
+                    let mut details = vec![];
+                    for entity in entities {
+                        let name = names.get(*entity).unwrap().capitalized();
+                        let health = health
+                            .get(*entity)
+                            .map_or(String::from(""), |h| format!(" ({}/{})", h.current, h.max));
+                        details.push(format!("{}{}", name, health));
+                    }
 
-                    names.resize(4, String::from(" "));
-                    text.single_mut().unwrap().sections[0].value =
-                        names.into_iter().intersperse(String::from("\n")).collect();
+                    details.resize(4, String::from(" "));
+                    text.single_mut().unwrap().sections[0].value = details
+                        .into_iter()
+                        .intersperse(String::from("\n"))
+                        .collect();
 
                     return;
                 }
