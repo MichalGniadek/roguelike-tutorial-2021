@@ -88,3 +88,28 @@ pub fn update_details(
     // Else
     text.single_mut().unwrap().sections[0].value = String::from(" \n \n \n ");
 }
+
+pub fn update_inventory(
+    mut text: Query<&mut Text, With<ui::Inventory>>,
+    player: Query<&Player>,
+    names: Query<&Name>,
+) {
+    let inventory = &player.single().unwrap().inventory;
+
+    let mut inv = vec![];
+    for (i, e) in inventory.iter().enumerate() {
+        inv.push(format!(
+            "{}. {}",
+            i + 1,
+            e.map_or(String::from(""), |e| names.get(e).unwrap().capitalized())
+        ));
+    }
+
+    if inventory.iter().all(|i| i.is_none()) {
+        text.single_mut().unwrap().sections[0].value =
+            String::from("Press G to pick up items\n \n \n \n ");
+    } else {
+        text.single_mut().unwrap().sections[0].value =
+            inv.into_iter().intersperse(String::from("\n")).collect();
+    }
+}

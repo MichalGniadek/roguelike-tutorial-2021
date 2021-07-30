@@ -62,6 +62,7 @@ pub mod ui {
     pub struct HpBar;
     pub struct Log;
     pub struct Details;
+    pub struct Inventory;
 }
 
 fn ui_setup(
@@ -217,5 +218,30 @@ fn ui_setup(
                 material: materials.add(Color::WHITE.into()),
                 ..Default::default()
             });
+
+            parent
+                .spawn_bundle(TextBundle {
+                    style: Style {
+                        margin: Rect {
+                            left: Val::Px(15.0),
+                            right: Val::Px(15.0),
+                            top: Val::Px(10.0),
+                            bottom: Val::Px(10.0),
+                        },
+                        align_self: AlignSelf::FlexStart,
+                        ..Default::default()
+                    },
+                    text: Text::with_section(
+                        "a\nb\nc\nd\ne",
+                        TextStyle {
+                            font: asset_server.load("Roboto/Roboto-Regular.ttf"),
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                        },
+                        TextAlignment::default(),
+                    ),
+                    ..Default::default()
+                })
+                .insert(ui::Inventory);
         });
 }
