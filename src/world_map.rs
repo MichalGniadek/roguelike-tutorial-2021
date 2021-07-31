@@ -188,6 +188,29 @@ impl WorldMap {
             |&pos| pos == end,
         )
     }
+
+    pub fn _line_of_sight(&self, start: GridPosition, end: GridPosition) -> bool {
+        let mut previous = None;
+        for (x, y) in line_drawing::Bresenham::new((start.x, start.y), (end.x, end.y)) {
+            if let Some(&tile) = self.tiles.get(x, y) {
+                // Don't go through diagonal walls.
+                if let Some((prev_x, prev_y)) = previous {
+                    if (self.tiles[[prev_x, y]] & self.tiles[[x, prev_y]])
+                        .contains(TileFlags::BLOCKS_VISION)
+                    {
+                        return false;
+                    }
+                }
+
+                previous = Some((x, y));
+
+                if tile.contains(TileFlags::BLOCKS_VISION) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
 }
 
 pub struct TileFactory {

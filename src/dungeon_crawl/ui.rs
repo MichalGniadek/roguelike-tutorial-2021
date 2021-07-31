@@ -53,7 +53,7 @@ pub fn update_cursor(
     let window = windows.get_primary().unwrap();
 
     if let Some(pos) = window.cursor_position() {
-        let size = Vec2::new(window.width() as f32, window.height() as f32);
+        let size = Vec2::new(window.width(), window.height());
         let (camera, orto) = camera.single().unwrap();
         let pos = (pos - size / 2.0) * orto.scale;
         let world_pos = camera.compute_matrix() * pos.extend(0.0).extend(1.0);

@@ -262,9 +262,14 @@ fn get_zone_entities(
     zone_count: usize,
 ) -> Vec<Vec<Entity>> {
     let mut zone_entities = vec![
-        vec![commands
-            .spawn_bundle(PlayerBundle::new(asset_server, materials))
-            .id()],
+        vec![
+            commands
+                .spawn_bundle(PlayerBundle::new(asset_server, materials))
+                .id(),
+            commands
+                .spawn_bundle(ItemBundle::health_potion(asset_server, materials))
+                .id(),
+        ],
         vec![
             commands
                 .spawn_bundle(EnemyBundle::orc(asset_server, materials))

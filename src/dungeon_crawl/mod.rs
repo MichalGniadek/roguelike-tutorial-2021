@@ -22,11 +22,13 @@ pub enum Action {
     Move(Entity, GridPosition, GridPosition),
     Attack(Entity, Entity, i32),
     PickUpItem(Entity, Entity),
+    UseItem(Entity, Entity, GridPosition),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ev {
     RemoveFromMap(Entity),
+    AddToMap(Entity, GridPosition),
     RemoveFromInitiative(Entity),
     Despawn(Entity),
     Nothing,
@@ -119,11 +121,13 @@ impl Health {
 
 fn player_control(
     mut query: Query<(Entity, &mut Player, &GridPosition), With<Initiative>>,
-    enemies: Query<(), With<Health>>,
+    healthy_entities: Query<(), With<Health>>,
     world: Res<WorldMap>,
     keys: Res<Input<KeyCode>>,
+    buttons: Res<Input<MouseButton>>,
     items: Query<(Entity, &GridPosition), With<Item>>,
     mut actions: EventWriter<Action>,
+    cursor: Query<&GridPosition, With<Cursor>>,
 ) {
     let (player_entity, mut player, position) = match query.single_mut() {
         Ok((e, p, pos)) => (e, p, pos),
@@ -154,6 +158,20 @@ fn player_control(
         }
     }
 
+    if buttons.just_pressed(MouseButton::Left) {
+        let cursor = *cursor.single().unwrap();
+        if world.tiles[cursor].contains(TileFlags::IN_VIEW) {
+            if let Some(index) = player.selected {
+                if let Some(item) = player.inventory[index] {
+                    actions.send(Action::UseItem(player_entity, item, cursor));
+                    player.inventory[index] = None;
+                    player.selected = None;
+                    return;
+                }
+            }
+        }
+    }
+
     if let Some(i) = player.selected {
         if player.inventory[i].is_none() {
             player.selected = None;
@@ -164,7 +182,7 @@ fn player_control(
         player.selected = None;
         if world.tiles[new_pos].contains(TileFlags::BLOCKS_MOVEMENT) {
             for &entity in &world.entities[new_pos] {
-                if let Ok(()) = enemies.get(entity) {
+                if let Ok(()) = healthy_entities.get(entity) {
                     actions.send(Action::Attack(player_entity, entity, 1));
                 }
             }
@@ -213,6 +231,7 @@ fn handle_actions(
     names: Query<&Name>,
     mut log: EventWriter<LogMessage>,
     mut player: Query<&mut Player>,
+    items: Query<&Item>,
 ) {
     for a in actions.iter() {
         match a {
@@ -269,6 +288,33 @@ fn handle_actions(
                     }
                 }
             }
+            Action::UseItem(_user, item, position) => match items.get(*item).unwrap() {
+                Item::HealthPotion(amount) => {
+                    if let Some(e) = world.entities[*position]
+                        .iter()
+                        .find(|e| healthy.get_mut(**e).is_ok())
+                    {
+                        log.send(LogMessage(format!(
+                            "{} is healed by {} health.",
+                            names.get(*e).unwrap().capitalized(),
+                            amount
+                        )));
+                        let mut e = healthy.get_mut(*e).unwrap();
+                        e.current = i32::min(e.max, e.current + amount);
+                        evs.send(Ev::Nothing);
+                    } else if !world.tiles[*position].contains(TileFlags::BLOCKS_MOVEMENT) {
+                        log.send(LogMessage(String::from(
+                            "Health potion lands on the floor.",
+                        )));
+                        evs.send(Ev::AddToMap(*item, *position));
+                    } else {
+                        log.send(LogMessage(String::from(
+                            "Health potion breaks on the wall.",
+                        )));
+                        evs.send(Ev::Despawn(*item));
+                    }
+                }
+            },
         }
     }
 }
@@ -297,6 +343,11 @@ fn handle_evs(
                 world.entities[*pos].swap_remove(i);
                 commands.entity(*entity).remove::<GridPosition>();
                 visible.get_mut(*entity).unwrap().is_visible = false;
+            }
+            Ev::AddToMap(entity, position) => {
+                world.entities[*position].push(*entity);
+                commands.entity(*entity).insert(*position);
+                visible.get_mut(*entity).unwrap().is_visible = true;
             }
             Ev::RemoveFromInitiative(entity) => {
                 let i = order.0.iter().position(|x| x == entity).unwrap();
