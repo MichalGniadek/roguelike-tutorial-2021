@@ -1,7 +1,7 @@
-use super::{Health, Name, Player};
+use super::{Cursor, Health, Name, Player};
 use crate::{
     ui,
-    world_map::{Grid, TileFlags, WorldMap},
+    world_map::{Grid, GridPosition, TileFlags, WorldMap},
 };
 use bevy::{
     math::vec2,
@@ -43,14 +43,12 @@ pub fn update_log(
         .collect();
 }
 
-pub fn update_details(
-    mut text: Query<&mut Text, With<ui::Details>>,
-    names: Query<&Name>,
-    health: Query<&Health>,
-    world: Res<WorldMap>,
+pub fn update_cursor(
     windows: Res<Windows>,
     camera: Query<(&Transform, &OrthographicProjection), (With<Camera>, Without<ui::Camera>)>,
     grid: Res<Grid>,
+    player: Query<&Player>,
+    mut cursor: Query<(&mut GridPosition, &mut Visible), With<Cursor>>,
 ) {
     let window = windows.get_primary().unwrap();
 
@@ -62,26 +60,43 @@ pub fn update_details(
         let grid_pos =
             (vec2(world_pos.x, world_pos.y) / grid.cell_size.as_f32() + vec2(0.5, 0.5)).as_i32();
 
-        if let Some(tile) = world.tiles.get(grid_pos.x, grid_pos.y) {
-            if tile.contains(TileFlags::IN_VIEW) {
-                if let Some(entities) = world.entities.get(grid_pos.x, grid_pos.y) {
-                    let mut details = vec![];
-                    for entity in entities {
-                        let name = names.get(*entity).unwrap().capitalized();
-                        let health = health
-                            .get(*entity)
-                            .map_or(String::from(""), |h| format!(" ({}/{})", h.current, h.max));
-                        details.push(format!("{}{}", name, health));
-                    }
+        *cursor.single_mut().unwrap().0 = GridPosition {
+            x: grid_pos.x,
+            y: grid_pos.y,
+        };
+    }
 
-                    details.resize(4, String::from(" "));
-                    text.single_mut().unwrap().sections[0].value = details
-                        .into_iter()
-                        .intersperse(String::from("\n"))
-                        .collect();
+    cursor.single_mut().unwrap().1.is_visible = player.single().unwrap().selected.is_some();
+}
 
-                    return;
+pub fn update_details(
+    mut text: Query<&mut Text, With<ui::Details>>,
+    names: Query<&Name>,
+    health: Query<&Health>,
+    world: Res<WorldMap>,
+    cursor: Query<&GridPosition, With<Cursor>>,
+) {
+    let grid_pos = cursor.single().unwrap();
+
+    if let Some(tile) = world.tiles.get(grid_pos.x, grid_pos.y) {
+        if tile.contains(TileFlags::IN_VIEW) {
+            if let Some(entities) = world.entities.get(grid_pos.x, grid_pos.y) {
+                let mut details = vec![];
+                for entity in entities {
+                    let name = names.get(*entity).unwrap().capitalized();
+                    let health = health
+                        .get(*entity)
+                        .map_or(String::from(""), |h| format!(" ({}/{})", h.current, h.max));
+                    details.push(format!("{}{}", name, health));
                 }
+
+                details.resize(4, String::from(" "));
+                text.single_mut().unwrap().sections[0].value = details
+                    .into_iter()
+                    .intersperse(String::from("\n"))
+                    .collect();
+
+                return;
             }
         }
     }
@@ -95,12 +110,17 @@ pub fn update_inventory(
     names: Query<&Name>,
 ) {
     let inventory = &player.single().unwrap().inventory;
+    let ind = player.single().unwrap().selected.unwrap_or(usize::MAX);
 
     let mut inv = vec![];
     for (i, e) in inventory.iter().enumerate() {
         inv.push(format!(
-            "{}. {}",
-            i + 1,
+            "{} {}",
+            if i == ind {
+                String::from(">>> ")
+            } else {
+                format!("{}.", i + 1)
+            },
             e.map_or(String::from(""), |e| names.get(e).unwrap().capitalized())
         ));
     }

@@ -1,10 +1,10 @@
-use super::Player;
+use super::{Cursor, Player};
 use crate::world_map::{GridPosition, Tile, TileFlags, WorldMap};
 use bevy::prelude::*;
 
 pub fn player_fov(
     player: Query<&GridPosition, With<Player>>,
-    mut visible: Query<(&mut Visible, &GridPosition, Option<&Tile>)>,
+    mut visible: Query<(&mut Visible, &GridPosition, Option<&Tile>), Without<Cursor>>,
     mut tiles: Query<(&mut Handle<ColorMaterial>, &GridPosition), With<Tile>>,
     mut world: ResMut<WorldMap>,
 ) {

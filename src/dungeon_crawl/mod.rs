@@ -44,8 +44,6 @@ impl Plugin for DungeonCrawlPlugin {
         use setup::*;
         app.add_system_set(
             SystemSet::on_enter(AppState::DungeonCrawl(TurnState::Setup))
-                .with_system(update_position.system().before("camera"))
-                .with_system(camera_position.system().label("camera"))
                 .with_system(update_world_map.system().label("update_world_map"))
                 .with_system(handle_initiative.system())
                 .with_system(player_fov.system().after("update_world_map"))
@@ -77,8 +75,11 @@ impl Plugin for DungeonCrawlPlugin {
         );
         app.add_system_set(
             SystemSet::on_update(AppState::DungeonCrawl(TurnState::Turn))
+                .with_system(update_position.system().label("positions"))
+                .with_system(camera_position.system().after("positions"))
                 .with_system(ui::update_health.system())
                 .with_system(ui::update_log.system())
+                .with_system(ui::update_cursor.system().before("positions"))
                 .with_system(ui::update_details.system())
                 .with_system(ui::update_inventory.system()),
         );
@@ -87,6 +88,7 @@ impl Plugin for DungeonCrawlPlugin {
 
 pub struct Player {
     pub inventory: [Option<Entity>; 5],
+    pub selected: Option<usize>,
 }
 pub struct EnemyAI;
 pub struct Initiative;
@@ -94,6 +96,7 @@ pub struct Name(pub String);
 pub enum Item {
     HealthPotion(i32),
 }
+pub struct Cursor;
 
 impl Name {
     pub fn capitalized(&self) -> String {
@@ -115,15 +118,15 @@ impl Health {
 }
 
 fn player_control(
-    query: Query<(Entity, &GridPosition), (With<Player>, With<Initiative>)>,
+    mut query: Query<(Entity, &mut Player, &GridPosition), With<Initiative>>,
     enemies: Query<(), With<Health>>,
     world: Res<WorldMap>,
     keys: Res<Input<KeyCode>>,
     items: Query<(Entity, &GridPosition), With<Item>>,
     mut actions: EventWriter<Action>,
 ) {
-    let (player_entity, position) = match query.single() {
-        Ok((e, pos)) => (e, pos),
+    let (player_entity, mut player, position) = match query.single_mut() {
+        Ok((e, p, pos)) => (e, p, pos),
         Err(QuerySingleError::NoEntities(_)) => return,
         Err(QuerySingleError::MultipleEntities(_)) => panic!(),
     };
@@ -136,16 +139,29 @@ fn player_control(
             Some(KeyCode::Left | KeyCode::A) => new_pos.x -= 1,
             Some(KeyCode::Right | KeyCode::D) => new_pos.x += 1,
             Some(KeyCode::G) => {
+                player.selected = None;
                 if let Some((item, _)) = items.iter().find(|(_, item)| *item == position) {
                     actions.send(Action::PickUpItem(player_entity, item));
                 }
                 return;
             }
+            Some(KeyCode::Key1) => player.selected = Some(0),
+            Some(KeyCode::Key2) => player.selected = Some(1),
+            Some(KeyCode::Key3) => player.selected = Some(2),
+            Some(KeyCode::Key4) => player.selected = Some(3),
+            Some(KeyCode::Key5) => player.selected = Some(4),
             _ => {}
         }
     }
 
+    if let Some(i) = player.selected {
+        if player.inventory[i].is_none() {
+            player.selected = None;
+        }
+    }
+
     if *position != new_pos {
+        player.selected = None;
         if world.tiles[new_pos].contains(TileFlags::BLOCKS_MOVEMENT) {
             for &entity in &world.entities[new_pos] {
                 if let Ok(()) = enemies.get(entity) {

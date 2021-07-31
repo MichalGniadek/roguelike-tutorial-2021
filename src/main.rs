@@ -6,8 +6,8 @@ mod world_generation;
 mod world_map;
 
 use bevy::prelude::*;
-use dungeon_crawl::TurnState;
-use world_map::Grid;
+use dungeon_crawl::{Cursor, TurnState};
+use world_map::{Grid, GridPosition};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AppState {
@@ -70,6 +70,17 @@ fn ui_setup(
     asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
+    commands
+        .spawn_bundle(SpriteBundle {
+            material: materials.add(ColorMaterial {
+                texture: Some(asset_server.load("convergence-target.png")),
+                color: Color::hex("EDEDED").unwrap(),
+            }),
+            transform: Transform::from_xyz(0.0, 0.0, 5.0),
+            ..Default::default()
+        })
+        .insert_bundle((GridPosition { x: 10, y: 10 }, Cursor));
+
     commands
         .spawn_bundle(UiCameraBundle::default())
         .insert(ui::Camera);

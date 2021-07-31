@@ -55,6 +55,7 @@ impl PlayerBundle {
             },
             player: Player {
                 inventory: [None; 5],
+                selected: None,
             },
             health: Health::new(8, 8),
             name: Name(String::from("player")),
