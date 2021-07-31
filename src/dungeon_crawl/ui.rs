@@ -66,7 +66,9 @@ pub fn update_cursor(
         };
     }
 
-    cursor.single_mut().unwrap().1.is_visible = player.single().unwrap().selected.is_some();
+    if let Ok(player) = player.single() {
+        cursor.single_mut().unwrap().1.is_visible = player.selected.is_some();
+    }
 }
 
 pub fn update_details(

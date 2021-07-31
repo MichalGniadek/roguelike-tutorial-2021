@@ -18,17 +18,19 @@ pub enum TurnState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
-    Wait(Entity),
+    Wait,
     Move(Entity, GridPosition, GridPosition),
     Attack(Entity, Entity, i32),
     PickUpItem(Entity, Entity),
     DropItem(Entity, Entity, GridPosition),
     Heal(Entity, i32),
+    Paralyze(Entity, i32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ev {
     RemoveFromMap(Entity),
+    Paralyze(Entity, i32),
     AddToMap(Entity, GridPosition),
     RemoveFromInitiative(Entity),
     Despawn(Entity),
@@ -62,7 +64,8 @@ impl Plugin for DungeonCrawlPlugin {
             SystemSet::on_update(AppState::DungeonCrawl(TurnState::Turn))
                 .before("actions")
                 .with_system(player_control.system())
-                .with_system(enemy_ai.system()),
+                .with_system(enemy_ai.system())
+                .with_system(paralyzed.system()),
         );
 
         app.add_system_set(
@@ -98,7 +101,11 @@ pub struct Initiative;
 pub struct Name(pub String);
 pub enum Item {
     HealthPotion(i32),
+    ScrollOfLightning(i32),
+    ScrollOfParalysis(i32),
+    ScrollOfFireball(i32),
 }
+pub struct Paralyzed(i32);
 pub struct Cursor;
 
 impl Name {
@@ -121,7 +128,7 @@ impl Health {
 }
 
 fn player_control(
-    mut query: Query<(Entity, &mut Player, &GridPosition), With<Initiative>>,
+    mut query: Query<(Entity, &mut Player, &GridPosition), (With<Initiative>, Without<Paralyzed>)>,
     healthy_entities: Query<(), With<Health>>,
     world: Res<WorldMap>,
     keys: Res<Input<KeyCode>>,
@@ -129,6 +136,7 @@ fn player_control(
     items: Query<(Entity, Option<&GridPosition>, &Item)>,
     mut actions: EventWriter<Action>,
     cursor: Query<&GridPosition, With<Cursor>>,
+    controllers: Query<Entity, Or<(With<Player>, With<EnemyAI>)>>,
 ) {
     let (player_entity, mut player, position) = match query.single_mut() {
         Ok((e, p, pos)) => (e, p, pos),
@@ -177,6 +185,40 @@ fn player_control(
                                 player.selected = None;
                             }
                         }
+                        Item::ScrollOfLightning(damage) => {
+                            if let Some(e) = world.entities[cursor]
+                                .iter()
+                                .find(|e| healthy_entities.get(**e).is_ok())
+                            {
+                                actions.send(Action::Attack(player_entity, *e, *damage));
+                                player.inventory[index] = None;
+                                player.selected = None;
+                            }
+                        }
+                        Item::ScrollOfParalysis(duration) => {
+                            if let Some(e) = world.entities[cursor]
+                                .iter()
+                                .find(|e| controllers.get(**e).is_ok())
+                            {
+                                actions.send(Action::Paralyze(*e, *duration));
+                                player.inventory[index] = None;
+                                player.selected = None;
+                            }
+                        }
+                        Item::ScrollOfFireball(damage) => {
+                            for x in -1..=1 {
+                                for y in -1..=1 {
+                                    if let Some(e) = world.entities[[cursor.x + x, cursor.y + y]]
+                                        .iter()
+                                        .find(|e| healthy_entities.get(**e).is_ok())
+                                    {
+                                        actions.send(Action::Attack(player_entity, *e, *damage));
+                                        player.inventory[index] = None;
+                                        player.selected = None;
+                                    }
+                                }
+                            }
+                        }
                     }
                 } else if buttons.just_pressed(MouseButton::Right) {
                     actions.send(Action::DropItem(player_entity, item, cursor));
@@ -208,7 +250,7 @@ fn player_control(
 }
 
 fn enemy_ai(
-    enemy: Query<(Entity, &GridPosition), (With<EnemyAI>, With<Initiative>)>,
+    enemy: Query<(Entity, &GridPosition), (With<EnemyAI>, With<Initiative>, Without<Paralyzed>)>,
     player: Query<(Entity, &GridPosition), With<Player>>,
     world: Res<WorldMap>,
     mut actions: EventWriter<Action>,
@@ -227,13 +269,28 @@ fn enemy_ai(
             } else if !world.tiles[path[1]].contains(TileFlags::BLOCKS_MOVEMENT) {
                 actions.send(Action::Move(enemy, *position, path[1]));
             } else {
-                actions.send(Action::Wait(enemy));
+                actions.send(Action::Wait);
             }
         } else {
-            actions.send(Action::Wait(enemy));
+            actions.send(Action::Wait);
         }
     } else {
-        actions.send(Action::Wait(enemy));
+        actions.send(Action::Wait);
+    }
+}
+
+fn paralyzed(
+    mut paralyzed: Query<(Entity, &mut Paralyzed), With<Initiative>>,
+    mut actions: EventWriter<Action>,
+    mut commands: Commands,
+) {
+    if let Ok((entity, mut paralyzed)) = paralyzed.single_mut() {
+        paralyzed.0 -= 1;
+        if paralyzed.0 == 0 {
+            commands.entity(entity).remove::<Paralyzed>();
+        } else {
+            actions.send(Action::Wait);
+        }
     }
 }
 
@@ -249,7 +306,7 @@ fn handle_actions(
 ) {
     for a in actions.iter() {
         match a {
-            Action::Wait(_) => evs.send(Ev::Nothing),
+            Action::Wait => evs.send(Ev::Nothing),
             Action::Move(entity, old_pos, new_pos) => {
                 let i = world.entities[*old_pos]
                     .iter()
@@ -327,6 +384,7 @@ fn handle_actions(
                 hp.current = i32::min(hp.max, hp.current + amount);
                 evs.send(Ev::Nothing);
             }
+            Action::Paralyze(entity, duration) => evs.send(Ev::Paralyze(*entity, *duration)),
         }
     }
 }
@@ -374,6 +432,9 @@ fn handle_evs(
                 commands.entity(*entity).despawn();
             }
             Ev::Nothing => {}
+            Ev::Paralyze(entity, duration) => {
+                commands.entity(*entity).insert(Paralyzed(*duration));
+            }
         }
     }
 

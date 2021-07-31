@@ -269,6 +269,15 @@ fn get_zone_entities(
             commands
                 .spawn_bundle(ItemBundle::health_potion(asset_server, materials))
                 .id(),
+            commands
+                .spawn_bundle(ItemBundle::scroll_of_paralysis(asset_server, materials))
+                .id(),
+            commands
+                .spawn_bundle(ItemBundle::scroll_of_lightning(asset_server, materials))
+                .id(),
+            commands
+                .spawn_bundle(ItemBundle::scroll_of_fireball(asset_server, materials))
+                .id(),
         ],
         vec![
             commands
