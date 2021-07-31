@@ -53,21 +53,21 @@ fn cellular_automata(
         );
     };
 
-    let mut entities = Array2D::with_size(MAP_SIZE - 2, MAP_SIZE - 2);
+    let mut entities = Array2D::with_size(MAP_SIZE + 20, MAP_SIZE + 20);
     let tile_factory = TileFactory::new(&asset_server, &mut materials);
     for x in 1..MAP_SIZE - 1 {
         for y in 1..MAP_SIZE - 1 {
             let mut tile = vec![];
 
             if let TileType::Alive(zone) = tile_map[[x, y]] {
-                tile.push(tile_factory.floor(&mut commands, x - 1, y - 1));
+                tile.push(tile_factory.floor(&mut commands, x + 9, y + 9));
 
                 // Zones start at 1 so we have to substract one
                 if let Some(e) = zone_entities.get_mut(zone - 1) {
                     if let Some(e) = e.pop() {
                         commands
                             .entity(e)
-                            .insert(GridPosition { x: x - 1, y: y - 1 });
+                            .insert(GridPosition { x: x + 9, y: y + 9 });
                         tile.push(e);
                     }
                 }
@@ -76,14 +76,14 @@ fn cellular_automata(
                 'finish: for i in -1..=1i32 {
                     for j in -1..=1i32 {
                         if let TileType::Alive(_) = tile_map[[x + i, y + j]] {
-                            tile.push(tile_factory.wall(&mut commands, x - 1, y - 1));
+                            tile.push(tile_factory.wall(&mut commands, x + 9, y + 9));
                             break 'finish;
                         }
                     }
                 }
             };
 
-            entities[[x - 1, y - 1]] = tile;
+            entities[[x + 9, y + 9]] = tile;
         }
     }
 
@@ -95,7 +95,7 @@ fn cellular_automata(
     commands.insert_resource(WorldMap {
         entities,
         tile_factory,
-        tiles: Array2D::with_size(MAP_SIZE - 2, MAP_SIZE - 2),
+        tiles: Array2D::with_size(MAP_SIZE + 20, MAP_SIZE + 20),
     });
 
     app_state

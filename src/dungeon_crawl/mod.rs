@@ -22,7 +22,8 @@ pub enum Action {
     Move(Entity, GridPosition, GridPosition),
     Attack(Entity, Entity, i32),
     PickUpItem(Entity, Entity),
-    UseItem(Entity, Entity, GridPosition),
+    DropItem(Entity, Entity, GridPosition),
+    Heal(Entity, i32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,7 +126,7 @@ fn player_control(
     world: Res<WorldMap>,
     keys: Res<Input<KeyCode>>,
     buttons: Res<Input<MouseButton>>,
-    items: Query<(Entity, &GridPosition), With<Item>>,
+    items: Query<(Entity, Option<&GridPosition>, &Item)>,
     mut actions: EventWriter<Action>,
     cursor: Query<&GridPosition, With<Cursor>>,
 ) {
@@ -144,7 +145,9 @@ fn player_control(
             Some(KeyCode::Right | KeyCode::D) => new_pos.x += 1,
             Some(KeyCode::G) => {
                 player.selected = None;
-                if let Some((item, _)) = items.iter().find(|(_, item)| *item == position) {
+                if let Some((item, _, _)) =
+                    items.iter().find(|(_, item, _)| item.contains(&position))
+                {
                     actions.send(Action::PickUpItem(player_entity, item));
                 }
                 return;
@@ -158,15 +161,27 @@ fn player_control(
         }
     }
 
-    if buttons.just_pressed(MouseButton::Left) {
-        let cursor = *cursor.single().unwrap();
-        if world.tiles[cursor].contains(TileFlags::IN_VIEW) {
-            if let Some(index) = player.selected {
-                if let Some(item) = player.inventory[index] {
-                    actions.send(Action::UseItem(player_entity, item, cursor));
+    let cursor = *cursor.single().unwrap();
+    if world.tiles[cursor].contains(TileFlags::IN_VIEW) {
+        if let Some(index) = player.selected {
+            if let Some(item) = player.inventory[index] {
+                if buttons.just_pressed(MouseButton::Left) {
+                    match items.get(item).unwrap().2 {
+                        Item::HealthPotion(amount) => {
+                            if let Some(e) = world.entities[cursor]
+                                .iter()
+                                .find(|e| healthy_entities.get(**e).is_ok())
+                            {
+                                actions.send(Action::Heal(*e, *amount));
+                                player.inventory[index] = None;
+                                player.selected = None;
+                            }
+                        }
+                    }
+                } else if buttons.just_pressed(MouseButton::Right) {
+                    actions.send(Action::DropItem(player_entity, item, cursor));
                     player.inventory[index] = None;
                     player.selected = None;
-                    return;
                 }
             }
         }
@@ -231,7 +246,6 @@ fn handle_actions(
     names: Query<&Name>,
     mut log: EventWriter<LogMessage>,
     mut player: Query<&mut Player>,
-    items: Query<&Item>,
 ) {
     for a in actions.iter() {
         match a {
@@ -288,33 +302,31 @@ fn handle_actions(
                     }
                 }
             }
-            Action::UseItem(_user, item, position) => match items.get(*item).unwrap() {
-                Item::HealthPotion(amount) => {
-                    if let Some(e) = world.entities[*position]
-                        .iter()
-                        .find(|e| healthy.get_mut(**e).is_ok())
-                    {
-                        log.send(LogMessage(format!(
-                            "{} is healed by {} health.",
-                            names.get(*e).unwrap().capitalized(),
-                            amount
-                        )));
-                        let mut e = healthy.get_mut(*e).unwrap();
-                        e.current = i32::min(e.max, e.current + amount);
-                        evs.send(Ev::Nothing);
-                    } else if !world.tiles[*position].contains(TileFlags::BLOCKS_MOVEMENT) {
-                        log.send(LogMessage(String::from(
-                            "Health potion lands on the floor.",
-                        )));
-                        evs.send(Ev::AddToMap(*item, *position));
-                    } else {
-                        log.send(LogMessage(String::from(
-                            "Health potion breaks on the wall.",
-                        )));
-                        evs.send(Ev::Despawn(*item));
-                    }
+            Action::DropItem(_, item, position) => {
+                if world.tiles[*position].contains(TileFlags::BLOCKS_MOVEMENT) {
+                    log.send(LogMessage(format!(
+                        "{} slams into the wall.",
+                        names.get(*item).unwrap().capitalized(),
+                    )));
+                    evs.send(Ev::Despawn(*item));
+                } else {
+                    log.send(LogMessage(format!(
+                        "{} lands on the floor.",
+                        names.get(*item).unwrap().capitalized(),
+                    )));
+                    evs.send(Ev::AddToMap(*item, *position));
                 }
-            },
+            }
+            Action::Heal(entity, amount) => {
+                log.send(LogMessage(format!(
+                    "{} is healed by {} health.",
+                    names.get(*entity).unwrap().capitalized(),
+                    amount
+                )));
+                let mut hp = healthy.get_mut(*entity).unwrap();
+                hp.current = i32::min(hp.max, hp.current + amount);
+                evs.send(Ev::Nothing);
+            }
         }
     }
 }

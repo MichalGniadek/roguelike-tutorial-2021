@@ -1,4 +1,5 @@
 #![feature(iter_intersperse)]
+#![feature(option_result_contains)]
 
 mod bundles;
 mod dungeon_crawl;
