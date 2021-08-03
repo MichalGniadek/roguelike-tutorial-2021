@@ -156,6 +156,7 @@ pub struct WorldMap {
     pub tile_factory: TileFactory,
 
     pub tiles: Array2D<TileFlags>,
+    pub stairs: GridPosition,
 }
 
 impl WorldMap {
@@ -216,9 +217,11 @@ impl WorldMap {
 pub struct TileFactory {
     pub visible_wall_material: Handle<ColorMaterial>,
     pub visible_floor_material: Handle<ColorMaterial>,
+    pub visible_stairs_material: Handle<ColorMaterial>,
 
     pub explored_wall_material: Handle<ColorMaterial>,
     pub explored_floor_material: Handle<ColorMaterial>,
+    pub explored_stairs_material: Handle<ColorMaterial>,
 }
 
 impl TileFactory {
@@ -235,12 +238,20 @@ impl TileFactory {
                 texture: Some(asset_server.load("square.png")),
                 color: Color::hex("826007").unwrap(),
             }),
+            visible_stairs_material: materials.add(ColorMaterial {
+                texture: Some(asset_server.load("stairs.png")),
+                color: Color::hex("826007").unwrap(),
+            }),
             explored_wall_material: materials.add(ColorMaterial {
                 texture: Some(asset_server.load("brick-wall.png")),
                 color: Color::hex("444444").unwrap(),
             }),
             explored_floor_material: materials.add(ColorMaterial {
                 texture: Some(asset_server.load("square.png")),
+                color: Color::hex("444444").unwrap(),
+            }),
+            explored_stairs_material: materials.add(ColorMaterial {
+                texture: Some(asset_server.load("stairs.png")),
                 color: Color::hex("444444").unwrap(),
             }),
         }
@@ -269,6 +280,16 @@ impl TileFactory {
                 ..Default::default()
             })
             .insert_bundle((Tile, GridPosition { x, y }, Name(String::from("floor"))))
+            .id()
+    }
+
+    pub fn stairs(&self, commands: &mut Commands, x: i32, y: i32) -> Entity {
+        commands
+            .spawn_bundle(SpriteBundle {
+                material: self.explored_stairs_material.clone(),
+                ..Default::default()
+            })
+            .insert_bundle((Tile, GridPosition { x, y }, Name(String::from("stairs"))))
             .id()
     }
 }

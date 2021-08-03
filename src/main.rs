@@ -16,7 +16,8 @@ pub enum AppState {
     WorldGeneration,
     DungeonCrawlEnter,
     DungeonCrawl(TurnState),
-    DungeonCrawlExit,
+    DungeonCrawlExitToMenu,
+    DungeonCrawlDescend,
 }
 
 pub struct UiCamera;

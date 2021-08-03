@@ -1,6 +1,6 @@
 use crate::{
     bundles::{EnemyBundle, ItemBundle, PlayerBundle},
-    dungeon_crawl::InitiativeOrder,
+    dungeon_crawl::{GameData, InitiativeOrder},
     world_map::{Array2D, GridPosition, TileFactory, WorldMap},
     AppState,
 };
@@ -32,6 +32,7 @@ fn cellular_automata(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut app_state: ResMut<State<AppState>>,
+    data: Res<GameData>,
 ) {
     let (tile_map, mut zone_entities) = loop {
         let mut tile_map = get_random_map();
@@ -49,17 +50,32 @@ fn cellular_automata(
 
         break (
             tile_map,
-            get_zone_entities(&mut commands, &asset_server, &mut materials, zone_count),
+            get_zone_entities(
+                &mut commands,
+                &asset_server,
+                &mut materials,
+                &*data,
+                zone_count,
+            ),
         );
     };
 
+    let mut stairs = GridPosition { x: 1, y: 1 };
+    while tile_map[stairs] == TileType::Dead {
+        stairs = GridPosition {
+            x: (1 + rand::random::<u32>() % (MAP_SIZE as u32 - 3)) as i32,
+            y: (1 + rand::random::<u32>() % (MAP_SIZE as u32 - 3)) as i32,
+        };
+    }
     let mut entities = Array2D::with_size(MAP_SIZE + 20, MAP_SIZE + 20);
     let tile_factory = TileFactory::new(&asset_server, &mut materials);
     for x in 1..MAP_SIZE - 1 {
         for y in 1..MAP_SIZE - 1 {
             let mut tile = vec![];
 
-            if let TileType::Alive(zone) = tile_map[[x, y]] {
+            if stairs.x == x && stairs.y == y {
+                tile.push(tile_factory.stairs(&mut commands, x + 9, y + 9));
+            } else if let TileType::Alive(zone) = tile_map[[x, y]] {
                 tile.push(tile_factory.floor(&mut commands, x + 9, y + 9));
 
                 // Zones start at 1 so we have to substract one
@@ -96,6 +112,10 @@ fn cellular_automata(
         entities,
         tile_factory,
         tiles: Array2D::with_size(MAP_SIZE + 20, MAP_SIZE + 20),
+        stairs: GridPosition {
+            x: stairs.x + 9,
+            y: stairs.y + 9,
+        },
     });
     commands.insert_resource(InitiativeOrder::default());
     app_state.set(AppState::DungeonCrawlEnter).unwrap();
@@ -257,6 +277,7 @@ fn get_zone_entities(
     commands: &mut Commands,
     asset_server: &Res<AssetServer>,
     materials: &mut ResMut<Assets<ColorMaterial>>,
+    data: &GameData,
     zone_count: usize,
 ) -> Vec<Vec<Entity>> {
     let mut zone_entities = vec![
@@ -307,7 +328,7 @@ fn get_zone_entities(
         0,
         vec![
             commands
-                .spawn_bundle(PlayerBundle::new(asset_server, materials))
+                .spawn_bundle(PlayerBundle::new(asset_server, materials, data))
                 .id(),
             commands
                 .spawn_bundle(ItemBundle::health_potion(asset_server, materials))

@@ -2,6 +2,7 @@ mod fov;
 mod setup;
 mod ui;
 
+use self::ui::{Logs, MyCanvas};
 use crate::{
     dungeon_crawl::ui::LogMessage,
     world_map::{GridPosition, TileFlags, WorldMap},
@@ -9,7 +10,6 @@ use crate::{
 };
 use bevy::{app::AppExit, ecs::system::QuerySingleError, prelude::*};
 use std::collections::VecDeque;
-use self::ui::MyCanvas;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TurnState {
@@ -37,6 +37,7 @@ pub enum Ev {
     Despawn(Entity),
     Nothing,
     Quit,
+    Descend,
 }
 
 #[derive(Default, Clone)]
@@ -48,7 +49,9 @@ impl Plugin for DungeonCrawlPlugin {
         app.add_event::<Action>()
             .add_event::<Ev>()
             .add_plugin(ui::DungeonCrawlUIPlugin)
-            .insert_resource(InitiativeOrder::default());
+            .init_resource::<Logs>()
+            .init_resource::<GameData>()
+            .init_resource::<InitiativeOrder>();
 
         macro_rules! switch_app_state {
             ($e:expr) => {
@@ -64,9 +67,15 @@ impl Plugin for DungeonCrawlPlugin {
             ),
         );
         app.add_system_set(
-            SystemSet::on_enter(AppState::DungeonCrawlExit)
+            SystemSet::on_enter(AppState::DungeonCrawlExitToMenu)
                 .with_system(cleanup.system())
+                .with_system(cleanup_log_and_inventory.system())
                 .with_system(switch_app_state!(AppState::MainMenu).system()),
+        );
+        app.add_system_set(
+            SystemSet::on_enter(AppState::DungeonCrawlDescend)
+                .with_system(cleanup.system())
+                .with_system(switch_app_state!(AppState::WorldGeneration).system()),
         );
 
         use fov::*;
@@ -101,10 +110,26 @@ impl Plugin for DungeonCrawlPlugin {
     }
 }
 
-pub struct Player {
+pub struct GameData {
     pub inventory: [Option<Entity>; 5],
     pub selected: Option<usize>,
+
+    pub previous_hp: Option<Health>,
+    pub floor: u32,
 }
+impl Default for GameData {
+    fn default() -> Self {
+        Self {
+            inventory: [None; 5],
+            selected: None,
+
+            previous_hp: None,
+            floor: 1,
+        }
+    }
+}
+
+pub struct Player;
 pub struct EnemyAI;
 pub struct Initiative;
 pub struct Name(pub String);
@@ -125,6 +150,7 @@ impl Name {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Health {
     pub current: i32,
     pub max: i32,
@@ -137,8 +163,9 @@ impl Health {
 }
 
 fn player_control(
-    mut query: Query<(Entity, &mut Player, &GridPosition), (With<Initiative>, Without<Paralyzed>)>,
+    mut query: Query<(Entity, &GridPosition), (With<Initiative>, Without<Paralyzed>, With<Player>)>,
     healthy_entities: Query<(), With<Health>>,
+    mut inventory: ResMut<GameData>,
     world: Res<WorldMap>,
     keys: Res<Input<KeyCode>>,
     buttons: Res<Input<MouseButton>>,
@@ -148,8 +175,8 @@ fn player_control(
     controllers: Query<Entity, Or<(With<Player>, With<EnemyAI>)>>,
     mut evs: EventWriter<Ev>,
 ) {
-    let (player_entity, mut player, position) = match query.single_mut() {
-        Ok((e, p, pos)) => (e, p, pos),
+    let (player_entity, position) = match query.single_mut() {
+        Ok((e, pos)) => (e, pos),
         Err(QuerySingleError::NoEntities(_)) => return,
         Err(QuerySingleError::MultipleEntities(_)) => panic!(),
     };
@@ -162,7 +189,7 @@ fn player_control(
             Some(KeyCode::Left | KeyCode::A) => new_pos.x -= 1,
             Some(KeyCode::Right | KeyCode::D) => new_pos.x += 1,
             Some(KeyCode::G) => {
-                player.selected = None;
+                inventory.selected = None;
                 if let Some((item, _, _)) =
                     items.iter().find(|(_, item, _)| item.contains(&position))
                 {
@@ -170,11 +197,11 @@ fn player_control(
                 }
                 return;
             }
-            Some(KeyCode::Key1) => player.selected = Some(0),
-            Some(KeyCode::Key2) => player.selected = Some(1),
-            Some(KeyCode::Key3) => player.selected = Some(2),
-            Some(KeyCode::Key4) => player.selected = Some(3),
-            Some(KeyCode::Key5) => player.selected = Some(4),
+            Some(KeyCode::Key1) => inventory.selected = Some(0),
+            Some(KeyCode::Key2) => inventory.selected = Some(1),
+            Some(KeyCode::Key3) => inventory.selected = Some(2),
+            Some(KeyCode::Key4) => inventory.selected = Some(3),
+            Some(KeyCode::Key5) => inventory.selected = Some(4),
             Some(KeyCode::Escape) => evs.send(Ev::Quit),
             _ => {}
         }
@@ -182,8 +209,8 @@ fn player_control(
 
     let cursor = *cursor.single().unwrap();
     if world.tiles[cursor].contains(TileFlags::IN_VIEW) {
-        if let Some(index) = player.selected {
-            if let Some(item) = player.inventory[index] {
+        if let Some(index) = inventory.selected {
+            if let Some(item) = inventory.inventory[index] {
                 if buttons.just_pressed(MouseButton::Left) {
                     match items.get(item).unwrap().2 {
                         Item::HealthPotion(amount) => {
@@ -192,8 +219,8 @@ fn player_control(
                                 .find(|e| healthy_entities.get(**e).is_ok())
                             {
                                 actions.send(Action::Heal(*e, *amount));
-                                player.inventory[index] = None;
-                                player.selected = None;
+                                inventory.inventory[index] = None;
+                                inventory.selected = None;
                             }
                         }
                         Item::ScrollOfLightning(damage) => {
@@ -202,8 +229,8 @@ fn player_control(
                                 .find(|e| healthy_entities.get(**e).is_ok())
                             {
                                 actions.send(Action::Attack(player_entity, *e, *damage));
-                                player.inventory[index] = None;
-                                player.selected = None;
+                                inventory.inventory[index] = None;
+                                inventory.selected = None;
                             }
                         }
                         Item::ScrollOfParalysis(duration) => {
@@ -212,8 +239,8 @@ fn player_control(
                                 .find(|e| controllers.get(**e).is_ok())
                             {
                                 actions.send(Action::Paralyze(*e, *duration));
-                                player.inventory[index] = None;
-                                player.selected = None;
+                                inventory.inventory[index] = None;
+                                inventory.selected = None;
                             }
                         }
                         Item::ScrollOfFireball(damage) => {
@@ -224,8 +251,8 @@ fn player_control(
                                         .find(|e| healthy_entities.get(**e).is_ok())
                                     {
                                         actions.send(Action::Attack(player_entity, *e, *damage));
-                                        player.inventory[index] = None;
-                                        player.selected = None;
+                                        inventory.inventory[index] = None;
+                                        inventory.selected = None;
                                     }
                                 }
                             }
@@ -233,22 +260,25 @@ fn player_control(
                     }
                 } else if buttons.just_pressed(MouseButton::Right) {
                     actions.send(Action::DropItem(player_entity, item, cursor));
-                    player.inventory[index] = None;
-                    player.selected = None;
+                    inventory.inventory[index] = None;
+                    inventory.selected = None;
                 }
             }
         }
     }
 
-    if let Some(i) = player.selected {
-        if player.inventory[i].is_none() {
-            player.selected = None;
+    if let Some(i) = inventory.selected {
+        if inventory.inventory[i].is_none() {
+            inventory.selected = None;
         }
     }
 
     if *position != new_pos {
-        player.selected = None;
-        if world.tiles[new_pos].contains(TileFlags::BLOCKS_MOVEMENT) {
+        inventory.selected = None;
+
+        if new_pos == world.stairs {
+            evs.send(Ev::Descend);
+        } else if world.tiles[new_pos].contains(TileFlags::BLOCKS_MOVEMENT) {
             for &entity in &world.entities[new_pos] {
                 if let Ok(()) = healthy_entities.get(entity) {
                     actions.send(Action::Attack(player_entity, entity, 1));
@@ -313,7 +343,7 @@ fn handle_actions(
     mut evs: EventWriter<Ev>,
     names: Query<&Name>,
     mut log: EventWriter<LogMessage>,
-    mut player: Query<&mut Player>,
+    mut inventory: ResMut<GameData>,
 ) {
     for a in actions.iter() {
         match a {
@@ -356,9 +386,7 @@ fn handle_actions(
                 }
             }
             Action::PickUpItem(_, item) => {
-                let inventory = &mut player.single_mut().unwrap().inventory;
-
-                for slot in inventory {
+                for slot in &mut inventory.inventory {
                     if slot.is_none() {
                         *slot = Some(*item);
                         log.send(LogMessage(format!(
@@ -410,6 +438,7 @@ fn handle_evs(
     mut visible: Query<&mut Visible>,
     mut temp_app_exit_events: EventWriter<AppExit>,
     mut app_state: ResMut<State<AppState>>,
+    mut log: EventWriter<LogMessage>,
 ) {
     let mut any_evs = false;
     for ev in evs.iter() {
@@ -447,7 +476,12 @@ fn handle_evs(
                 commands.entity(*entity).insert(Paralyzed(*duration));
             }
             Ev::Quit => {
-                app_state.set(AppState::DungeonCrawlExit).unwrap();
+                app_state.set(AppState::DungeonCrawlExitToMenu).unwrap();
+                return;
+            }
+            Ev::Descend => {
+                log.send(LogMessage("You descend to the next dungeon floor".into()));
+                app_state.set(AppState::DungeonCrawlDescend).unwrap();
                 return;
             }
         }
@@ -461,12 +495,24 @@ fn handle_evs(
 }
 
 pub fn cleanup(
-    q: Query<Entity, Or<(With<MyCanvas>, With<GridPosition>, With<Item>)>>,
+    q: Query<Entity, Or<(With<MyCanvas>, With<GridPosition>)>>,
     mut commands: Commands,
+    mut data: ResMut<GameData>,
+    player: Query<&Health, With<Player>>,
 ) {
     for e in q.iter() {
         commands.entity(e).despawn_recursive();
     }
     commands.remove_resource::<InitiativeOrder>();
     commands.remove_resource::<WorldMap>();
+    data.previous_hp = Some(*player.single().unwrap());
+    data.floor += 1;
+}
+
+pub fn cleanup_log_and_inventory(mut commands: Commands, inventory: Res<GameData>) {
+    commands.insert_resource(Logs::default());
+    for e in inventory.inventory.iter().filter_map(|i| *i) {
+        commands.entity(e).despawn();
+    }
+    commands.insert_resource(GameData::default());
 }

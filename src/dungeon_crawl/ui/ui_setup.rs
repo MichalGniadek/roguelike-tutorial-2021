@@ -1,4 +1,4 @@
-use super::{MyCanvas, MyDetails, MyHpBar, MyHpText, MyInventory, MyLog};
+use super::{MyCanvas, MyDetails, MyFloorText, MyHpBar, MyHpText, MyInventory, MyLog};
 use crate::{dungeon_crawl::Cursor, world_map::GridPosition};
 use bevy::prelude::*;
 
@@ -72,6 +72,25 @@ pub fn create(
                         })
                         .insert(MyHpBar);
                 });
+
+            parent
+                .spawn_bundle(TextBundle {
+                    style: Style {
+                        margin: Rect::all(Val::Px(5.0)),
+                        ..Default::default()
+                    },
+                    text: Text::with_section(
+                        "Floor 0",
+                        TextStyle {
+                            font: asset_server.load("Roboto/Roboto-Regular.ttf"),
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                        },
+                        TextAlignment::default(),
+                    ),
+                    ..Default::default()
+                })
+                .insert(MyFloorText);
 
             parent.spawn_bundle(NodeBundle {
                 style: Style {

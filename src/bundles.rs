@@ -1,5 +1,5 @@
 use crate::{
-    dungeon_crawl::{EnemyAI, Health, Item, Name, Player},
+    dungeon_crawl::{EnemyAI, GameData, Health, Item, Name, Player},
     world_map::BlocksMovement,
 };
 use bevy::prelude::*;
@@ -43,7 +43,11 @@ pub struct PlayerBundle {
 }
 
 impl PlayerBundle {
-    pub fn new(asset_server: &AssetServer, materials: &mut ResMut<Assets<ColorMaterial>>) -> Self {
+    pub fn new(
+        asset_server: &AssetServer,
+        materials: &mut ResMut<Assets<ColorMaterial>>,
+        data: &GameData,
+    ) -> Self {
         Self {
             sprite: SpriteBundle {
                 material: materials.add(ColorMaterial {
@@ -53,11 +57,8 @@ impl PlayerBundle {
                 transform: Transform::from_xyz(0.0, 0.0, 1.0),
                 ..Default::default()
             },
-            player: Player {
-                inventory: [None; 5],
-                selected: None,
-            },
-            health: Health::new(8, 8),
+            player: Player,
+            health: data.previous_hp.unwrap_or(Health::new(8, 8)),
             name: Name(String::from("player")),
         }
     }

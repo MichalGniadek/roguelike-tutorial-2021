@@ -73,12 +73,16 @@ pub fn player_fov(
                 *mat = world.tile_factory.visible_floor_material.clone();
             } else if mat.id == world.tile_factory.explored_wall_material.id {
                 *mat = world.tile_factory.visible_wall_material.clone();
+            } else if mat.id == world.tile_factory.explored_stairs_material.id {
+                *mat = world.tile_factory.visible_stairs_material.clone();
             }
         } else {
             if mat.id == world.tile_factory.visible_floor_material.id {
                 *mat = world.tile_factory.explored_floor_material.clone();
             } else if mat.id == world.tile_factory.visible_wall_material.id {
                 *mat = world.tile_factory.explored_wall_material.clone();
+            } else if mat.id == world.tile_factory.visible_stairs_material.id {
+                *mat = world.tile_factory.explored_stairs_material.clone();
             }
         }
     }

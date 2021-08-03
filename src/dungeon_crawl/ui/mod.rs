@@ -1,6 +1,6 @@
 mod ui_setup;
 
-use super::{Cursor, Health, Name, Player, TurnState};
+use super::{Cursor, GameData, Health, Name, Player, TurnState};
 use crate::{
     world_map::{Grid, GridPosition, TileFlags, WorldMap},
     AppState, UiCamera,
@@ -14,12 +14,15 @@ use std::collections::VecDeque;
 
 pub struct MyCanvas;
 pub struct MyHpText;
+pub struct MyFloorText;
 pub struct MyHpBar;
 pub struct MyLog;
 pub struct MyDetails;
 pub struct MyInventory;
 
 pub struct LogMessage(pub String);
+#[derive(Default)]
+pub struct Logs(VecDeque<String>);
 
 pub struct DungeonCrawlUIPlugin;
 impl Plugin for DungeonCrawlUIPlugin {
@@ -33,6 +36,7 @@ impl Plugin for DungeonCrawlUIPlugin {
                 .with_system(update_position.system().label("positions"))
                 .with_system(camera_position.system().after("positions"))
                 .with_system(update_health.system())
+                .with_system(update_floor.system())
                 .with_system(update_log.system())
                 .with_system(update_cursor.system().before("positions"))
                 .with_system(update_details.system())
@@ -81,17 +85,22 @@ pub fn update_health(
     bar.single_mut().unwrap().size.width = Val::Percent(100.0 * hp.current as f32 / hp.max as f32);
 }
 
+pub fn update_floor(mut text: Query<&mut Text, With<MyFloorText>>, data: Res<GameData>) {
+    text.single_mut().unwrap().sections[0].value = format!("Floor {}", data.floor);
+}
+
 pub fn update_log(
     mut text: Query<&mut Text, With<MyLog>>,
     mut messages: EventReader<LogMessage>,
-    mut log: Local<VecDeque<String>>,
+    mut log: ResMut<Logs>,
 ) {
     for m in messages.iter() {
-        log.push_front(m.0.clone());
+        log.0.push_front(m.0.clone());
     }
-    log.resize(6, String::from(" "));
+    log.0.resize(6, String::from(" "));
 
     text.single_mut().unwrap().sections[0].value = log
+        .0
         .iter()
         .intersperse(&String::from("\n"))
         .cloned()
@@ -102,7 +111,7 @@ pub fn update_cursor(
     windows: Res<Windows>,
     camera: Query<(&Transform, &OrthographicProjection), (With<Camera>, Without<UiCamera>)>,
     grid: Res<Grid>,
-    player: Query<&Player>,
+    inventory: Res<GameData>,
     mut cursor: Query<(&mut GridPosition, &mut Visible), With<Cursor>>,
 ) {
     let window = windows.get_primary().unwrap();
@@ -121,9 +130,7 @@ pub fn update_cursor(
         };
     }
 
-    if let Ok(player) = player.single() {
-        cursor.single_mut().unwrap().1.is_visible = player.selected.is_some();
-    }
+    cursor.single_mut().unwrap().1.is_visible = inventory.selected.is_some();
 }
 
 pub fn update_details(
@@ -163,32 +170,29 @@ pub fn update_details(
 
 pub fn update_inventory(
     mut text: Query<&mut Text, With<MyInventory>>,
-    player: Query<&Player>,
+    inventory: Res<GameData>,
     names: Query<&Name>,
 ) {
-    if let Ok(player) = player.single() {
-        let inventory = player.inventory;
-        let ind = player.selected.unwrap_or(usize::MAX);
+    let ind = inventory.selected.unwrap_or(usize::MAX);
 
-        let mut inv = vec![];
-        for (i, e) in inventory.iter().enumerate() {
-            inv.push(format!(
-                "{} {}",
-                if i == ind {
-                    String::from(">>> ")
-                } else {
-                    format!("{}.", i + 1)
-                },
-                e.map_or(String::from(""), |e| names.get(e).unwrap().capitalized())
-            ));
-        }
+    let mut inv = vec![];
+    for (i, e) in inventory.inventory.iter().enumerate() {
+        inv.push(format!(
+            "{} {}",
+            if i == ind {
+                String::from(">>> ")
+            } else {
+                format!("[{}] ", i + 1)
+            },
+            e.map_or(String::from(""), |e| names.get(e).unwrap().capitalized())
+        ));
+    }
 
-        if inventory.iter().all(|i| i.is_none()) {
-            text.single_mut().unwrap().sections[0].value =
-                String::from("Press G to pick up items\n \n \n \n ");
-        } else {
-            text.single_mut().unwrap().sections[0].value =
-                inv.into_iter().intersperse(String::from("\n")).collect();
-        }
+    if inventory.inventory.iter().all(|i| i.is_none()) {
+        text.single_mut().unwrap().sections[0].value =
+            String::from("Press G to pick up items\n \n \n \n ");
+    } else {
+        text.single_mut().unwrap().sections[0].value =
+            inv.into_iter().intersperse(String::from("\n")).collect();
     }
 }
