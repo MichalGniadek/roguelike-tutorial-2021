@@ -1,6 +1,7 @@
+mod ui_setup;
+
 use super::{Cursor, Health, Name, Player, TurnState};
 use crate::{
-    my_ui,
     world_map::{Grid, GridPosition, TileFlags, WorldMap},
     AppState,
 };
@@ -11,10 +12,23 @@ use bevy::{
 };
 use std::collections::VecDeque;
 
+pub struct MyCanvas;
+pub struct MyCamera;
+pub struct MyHpText;
+pub struct MyHpBar;
+pub struct MyLog;
+pub struct MyDetails;
+pub struct MyInventory;
+
+pub struct LogMessage(pub String);
+
 pub struct DungeonCrawlUIPlugin;
 impl Plugin for DungeonCrawlUIPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.add_event::<LogMessage>();
+        app.add_system_set(
+            SystemSet::on_enter(AppState::DungeonCrawlEnter).with_system(ui_setup::create.system()),
+        );
         app.add_system_set(
             SystemSet::on_update(AppState::DungeonCrawl(TurnState::Turn))
                 .with_system(update_position.system().label("positions"))
@@ -41,7 +55,7 @@ pub fn update_position(
 pub fn camera_position(
     mut query: QuerySet<(
         Query<&Transform, With<Player>>,
-        Query<&mut Transform, (With<Camera>, Without<my_ui::crawl::Camera>)>,
+        Query<&mut Transform, (With<Camera>, Without<MyCamera>)>,
     )>,
 ) {
     let mut position = match query.q0_mut().single_mut() {
@@ -54,11 +68,9 @@ pub fn camera_position(
     *camera = position;
 }
 
-pub struct LogMessage(pub String);
-
 pub fn update_health(
-    mut text: Query<&mut Text, With<my_ui::crawl::HpText>>,
-    mut bar: Query<&mut Style, With<my_ui::crawl::HpBar>>,
+    mut text: Query<&mut Text, With<MyHpText>>,
+    mut bar: Query<&mut Style, With<MyHpBar>>,
     hp: Query<&Health, With<Player>>,
 ) {
     let hp = match hp.single() {
@@ -71,7 +83,7 @@ pub fn update_health(
 }
 
 pub fn update_log(
-    mut text: Query<&mut Text, With<my_ui::crawl::Log>>,
+    mut text: Query<&mut Text, With<MyLog>>,
     mut messages: EventReader<LogMessage>,
     mut log: Local<VecDeque<String>>,
 ) {
@@ -89,10 +101,7 @@ pub fn update_log(
 
 pub fn update_cursor(
     windows: Res<Windows>,
-    camera: Query<
-        (&Transform, &OrthographicProjection),
-        (With<Camera>, Without<my_ui::crawl::Camera>),
-    >,
+    camera: Query<(&Transform, &OrthographicProjection), (With<Camera>, Without<MyCamera>)>,
     grid: Res<Grid>,
     player: Query<&Player>,
     mut cursor: Query<(&mut GridPosition, &mut Visible), With<Cursor>>,
@@ -119,7 +128,7 @@ pub fn update_cursor(
 }
 
 pub fn update_details(
-    mut text: Query<&mut Text, With<my_ui::crawl::Details>>,
+    mut text: Query<&mut Text, With<MyDetails>>,
     names: Query<&Name>,
     health: Query<&Health>,
     world: Res<WorldMap>,
@@ -154,7 +163,7 @@ pub fn update_details(
 }
 
 pub fn update_inventory(
-    mut text: Query<&mut Text, With<my_ui::crawl::Inventory>>,
+    mut text: Query<&mut Text, With<MyInventory>>,
     player: Query<&Player>,
     names: Query<&Name>,
 ) {
