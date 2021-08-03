@@ -8,7 +8,7 @@ use crate::{
     world_map::{GridPosition, TileFlags, WorldMap},
     AppState,
 };
-use bevy::{app::AppExit, ecs::system::QuerySingleError, prelude::*};
+use bevy::{ecs::system::QuerySingleError, prelude::*};
 use std::collections::VecDeque;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -116,7 +116,12 @@ pub struct GameData {
 
     pub previous_hp: Option<Health>,
     pub floor: u32,
+
+    pub level: u32,
+    pub current_xp: u32,
+    pub needed_xp: u32,
 }
+
 impl Default for GameData {
     fn default() -> Self {
         Self {
@@ -125,6 +130,10 @@ impl Default for GameData {
 
             previous_hp: None,
             floor: 1,
+
+            level: 1,
+            current_xp: 0,
+            needed_xp: 3,
         }
     }
 }
@@ -342,8 +351,9 @@ fn handle_actions(
     mut world: ResMut<WorldMap>,
     mut evs: EventWriter<Ev>,
     names: Query<&Name>,
+    player: Query<(), With<Player>>,
     mut log: EventWriter<LogMessage>,
-    mut inventory: ResMut<GameData>,
+    mut data: ResMut<GameData>,
 ) {
     for a in actions.iter() {
         match a {
@@ -378,6 +388,19 @@ fn handle_actions(
                         names.get(*attackee).unwrap().capitalized()
                     )));
 
+                    if player.get(*attacker).is_ok() {
+                        data.current_xp += 1;
+                        if data.current_xp >= data.needed_xp {
+                            log.send(LogMessage("You level up!".into()));
+
+                            data.current_xp = 0;
+                            data.needed_xp += 2;
+                            data.level += 1;
+
+                            healthy.get_mut(*attacker).unwrap().max += 2;
+                        }
+                    }
+
                     evs.send(Ev::RemoveFromMap(*attackee));
                     evs.send(Ev::RemoveFromInitiative(*attackee));
                     evs.send(Ev::Despawn(*attackee));
@@ -386,7 +409,7 @@ fn handle_actions(
                 }
             }
             Action::PickUpItem(_, item) => {
-                for slot in &mut inventory.inventory {
+                for slot in &mut data.inventory {
                     if slot.is_none() {
                         *slot = Some(*item);
                         log.send(LogMessage(format!(
@@ -436,7 +459,6 @@ fn handle_evs(
     mut world: ResMut<WorldMap>,
     player: Query<(), With<Player>>,
     mut visible: Query<&mut Visible>,
-    mut temp_app_exit_events: EventWriter<AppExit>,
     mut app_state: ResMut<State<AppState>>,
     mut log: EventWriter<LogMessage>,
 ) {
@@ -466,7 +488,7 @@ fn handle_evs(
             }
             Ev::Despawn(entity) => {
                 if player.get(*entity).is_ok() {
-                    temp_app_exit_events.send(AppExit);
+                    app_state.set(AppState::DungeonCrawlExitToMenu).unwrap();
                     return;
                 }
                 commands.entity(*entity).despawn();

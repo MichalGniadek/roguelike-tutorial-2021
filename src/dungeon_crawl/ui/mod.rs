@@ -14,8 +14,10 @@ use std::collections::VecDeque;
 
 pub struct MyCanvas;
 pub struct MyHpText;
-pub struct MyFloorText;
 pub struct MyHpBar;
+pub struct MyXPText;
+pub struct MyXPBar;
+pub struct MyFloorText;
 pub struct MyLog;
 pub struct MyDetails;
 pub struct MyInventory;
@@ -36,6 +38,7 @@ impl Plugin for DungeonCrawlUIPlugin {
                 .with_system(update_position.system().label("positions"))
                 .with_system(camera_position.system().after("positions"))
                 .with_system(update_health.system())
+                .with_system(update_xp.system())
                 .with_system(update_floor.system())
                 .with_system(update_log.system())
                 .with_system(update_cursor.system().before("positions"))
@@ -83,6 +86,19 @@ pub fn update_health(
 
     text.single_mut().unwrap().sections[0].value = format!("HP: {}/{}", hp.current, hp.max);
     bar.single_mut().unwrap().size.width = Val::Percent(100.0 * hp.current as f32 / hp.max as f32);
+}
+
+pub fn update_xp(
+    mut text: Query<&mut Text, With<MyXPText>>,
+    mut bar: Query<&mut Style, With<MyXPBar>>,
+    data: Res<GameData>,
+) {
+    text.single_mut().unwrap().sections[0].value = format!(
+        "XP: {}/{}   LEVEL: {}",
+        data.current_xp, data.needed_xp, data.level
+    );
+    bar.single_mut().unwrap().size.width =
+        Val::Percent(100.0 * data.current_xp as f32 / data.needed_xp as f32);
 }
 
 pub fn update_floor(mut text: Query<&mut Text, With<MyFloorText>>, data: Res<GameData>) {
