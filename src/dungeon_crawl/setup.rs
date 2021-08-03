@@ -1,7 +1,6 @@
-use super::{EnemyAI, Initiative, Player};
+use super::{EnemyAI, Initiative, InitiativeOrder, Player};
 use crate::world_map::{BlocksMovement, BlocksVision, Tile, TileFlags, WorldMap};
 use bevy::prelude::*;
-use std::collections::VecDeque;
 
 pub fn update_world_map(
     mut world: ResMut<WorldMap>,
@@ -44,9 +43,6 @@ pub fn update_world_map(
         }
     }
 }
-
-#[derive(Default)]
-pub struct InitiativeOrder(pub VecDeque<Entity>);
 
 pub fn handle_initiative(
     mut order: ResMut<InitiativeOrder>,

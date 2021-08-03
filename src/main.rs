@@ -56,8 +56,7 @@ fn main() {
     #[cfg(target_arch = "wasm32")]
     app.add_plugin(bevy_webgl2::WebGL2Plugin);
 
-    app.add_system(bevy::input::system::exit_on_esc_system.system())
-        .add_state(AppState::MainMenu)
+    app.add_state(AppState::MainMenu)
         .add_system_set(
             SystemSet::on_enter(AppState::MainMenu).with_system(main_menu_ui_create.system()),
         )

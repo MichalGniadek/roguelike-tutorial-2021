@@ -2,13 +2,14 @@ mod fov;
 mod setup;
 mod ui;
 
-use self::setup::InitiativeOrder;
 use crate::{
     dungeon_crawl::ui::LogMessage,
     world_map::{GridPosition, TileFlags, WorldMap},
     AppState,
 };
 use bevy::{app::AppExit, ecs::system::QuerySingleError, prelude::*};
+use std::collections::VecDeque;
+use self::ui::MyCanvas;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TurnState {
@@ -35,7 +36,11 @@ pub enum Ev {
     RemoveFromInitiative(Entity),
     Despawn(Entity),
     Nothing,
+    Quit,
 }
+
+#[derive(Default, Clone)]
+pub struct InitiativeOrder(pub VecDeque<Entity>);
 
 pub struct DungeonCrawlPlugin;
 impl Plugin for DungeonCrawlPlugin {
@@ -43,7 +48,7 @@ impl Plugin for DungeonCrawlPlugin {
         app.add_event::<Action>()
             .add_event::<Ev>()
             .add_plugin(ui::DungeonCrawlUIPlugin)
-            .init_resource::<InitiativeOrder>();
+            .insert_resource(InitiativeOrder::default());
 
         macro_rules! switch_app_state {
             ($e:expr) => {
@@ -60,6 +65,7 @@ impl Plugin for DungeonCrawlPlugin {
         );
         app.add_system_set(
             SystemSet::on_enter(AppState::DungeonCrawlExit)
+                .with_system(cleanup.system())
                 .with_system(switch_app_state!(AppState::MainMenu).system()),
         );
 
@@ -140,6 +146,7 @@ fn player_control(
     mut actions: EventWriter<Action>,
     cursor: Query<&GridPosition, With<Cursor>>,
     controllers: Query<Entity, Or<(With<Player>, With<EnemyAI>)>>,
+    mut evs: EventWriter<Ev>,
 ) {
     let (player_entity, mut player, position) = match query.single_mut() {
         Ok((e, p, pos)) => (e, p, pos),
@@ -168,6 +175,7 @@ fn player_control(
             Some(KeyCode::Key3) => player.selected = Some(2),
             Some(KeyCode::Key4) => player.selected = Some(3),
             Some(KeyCode::Key5) => player.selected = Some(4),
+            Some(KeyCode::Escape) => evs.send(Ev::Quit),
             _ => {}
         }
     }
@@ -438,6 +446,10 @@ fn handle_evs(
             Ev::Paralyze(entity, duration) => {
                 commands.entity(*entity).insert(Paralyzed(*duration));
             }
+            Ev::Quit => {
+                app_state.set(AppState::DungeonCrawlExit).unwrap();
+                return;
+            }
         }
     }
 
@@ -446,4 +458,15 @@ fn handle_evs(
             .set(AppState::DungeonCrawl(TurnState::WorldUpdate))
             .unwrap();
     }
+}
+
+pub fn cleanup(
+    q: Query<Entity, Or<(With<MyCanvas>, With<GridPosition>, With<Item>)>>,
+    mut commands: Commands,
+) {
+    for e in q.iter() {
+        commands.entity(e).despawn_recursive();
+    }
+    commands.remove_resource::<InitiativeOrder>();
+    commands.remove_resource::<WorldMap>();
 }

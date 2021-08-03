@@ -191,9 +191,3 @@ pub fn create(
                 .insert(MyInventory);
         });
 }
-
-pub fn cleanup(q: Query<Entity, With<MyCanvas>>, mut commands: Commands) {
-    for e in q.iter() {
-        commands.entity(e).despawn_recursive();
-    }
-}

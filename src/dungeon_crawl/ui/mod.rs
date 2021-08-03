@@ -38,9 +38,6 @@ impl Plugin for DungeonCrawlUIPlugin {
                 .with_system(update_details.system())
                 .with_system(update_inventory.system()),
         );
-        app.add_system_set(
-            SystemSet::on_enter(AppState::DungeonCrawlExit).with_system(ui_setup::cleanup.system()),
-        );
     }
 }
 

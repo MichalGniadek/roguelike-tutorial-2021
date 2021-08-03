@@ -1,5 +1,6 @@
 use crate::{
     bundles::{EnemyBundle, ItemBundle, PlayerBundle},
+    dungeon_crawl::InitiativeOrder,
     world_map::{Array2D, GridPosition, TileFactory, WorldMap},
     AppState,
 };
@@ -96,7 +97,7 @@ fn cellular_automata(
         tile_factory,
         tiles: Array2D::with_size(MAP_SIZE + 20, MAP_SIZE + 20),
     });
-
+    commands.insert_resource(InitiativeOrder::default());
     app_state.set(AppState::DungeonCrawlEnter).unwrap();
 }
 
@@ -261,23 +262,6 @@ fn get_zone_entities(
     let mut zone_entities = vec![
         vec![
             commands
-                .spawn_bundle(PlayerBundle::new(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(ItemBundle::health_potion(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(ItemBundle::scroll_of_paralysis(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(ItemBundle::scroll_of_lightning(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(ItemBundle::scroll_of_fireball(asset_server, materials))
-                .id(),
-        ],
-        vec![
-            commands
                 .spawn_bundle(EnemyBundle::orc(asset_server, materials))
                 .id(),
             commands
@@ -316,9 +300,29 @@ fn get_zone_entities(
         ],
     ];
 
-    assert!(zone_entities.len() <= zone_count);
-    zone_entities.resize(zone_count, vec![]);
+    assert!(zone_entities.len() < zone_count);
+    zone_entities.resize(zone_count - 1, vec![]);
     zone_entities.shuffle(&mut thread_rng());
+    zone_entities.insert(
+        0,
+        vec![
+            commands
+                .spawn_bundle(PlayerBundle::new(asset_server, materials))
+                .id(),
+            commands
+                .spawn_bundle(ItemBundle::health_potion(asset_server, materials))
+                .id(),
+            commands
+                .spawn_bundle(ItemBundle::scroll_of_paralysis(asset_server, materials))
+                .id(),
+            commands
+                .spawn_bundle(ItemBundle::scroll_of_lightning(asset_server, materials))
+                .id(),
+            commands
+                .spawn_bundle(ItemBundle::scroll_of_fireball(asset_server, materials))
+                .id(),
+        ],
+    );
 
     zone_entities
 }
