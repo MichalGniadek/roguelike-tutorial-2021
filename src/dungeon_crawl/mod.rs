@@ -12,7 +12,7 @@ use bevy::{app::AppExit, ecs::system::QuerySingleError, prelude::*};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TurnState {
-    Setup,
+    WorldUpdate,
     Turn,
 }
 
@@ -42,22 +42,35 @@ impl Plugin for DungeonCrawlPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.add_event::<Action>()
             .add_event::<Ev>()
-            .add_event::<LogMessage>()
+            .add_plugin(ui::DungeonCrawlUIPlugin)
             .init_resource::<InitiativeOrder>();
+
+        macro_rules! switch_app_state {
+            ($e:expr) => {
+                (|mut app_state: ResMut<State<AppState>>| {
+                    let _ = app_state.set($e);
+                })
+            };
+        }
+
+        app.add_system_set(
+            SystemSet::on_enter(AppState::DungeonCrawlEnter).with_system(
+                switch_app_state!(AppState::DungeonCrawl(TurnState::WorldUpdate)).system(),
+            ),
+        );
+        app.add_system_set(
+            SystemSet::on_enter(AppState::DungeonCrawlExit)
+                .with_system(switch_app_state!(AppState::MainMenu).system()),
+        );
 
         use fov::*;
         use setup::*;
         app.add_system_set(
-            SystemSet::on_enter(AppState::DungeonCrawl(TurnState::Setup))
+            SystemSet::on_enter(AppState::DungeonCrawl(TurnState::WorldUpdate))
                 .with_system(update_world_map.system().label("update_world_map"))
                 .with_system(handle_initiative.system())
                 .with_system(player_fov.system().after("update_world_map"))
-                .with_system(
-                    (|mut app_state: ResMut<State<AppState>>| {
-                        let _ = app_state.set(AppState::DungeonCrawl(TurnState::Turn));
-                    })
-                    .system(),
-                ),
+                .with_system(switch_app_state!(AppState::DungeonCrawl(TurnState::Turn)).system()),
         );
 
         app.add_system_set(
@@ -78,16 +91,6 @@ impl Plugin for DungeonCrawlPlugin {
             SystemSet::on_update(AppState::DungeonCrawl(TurnState::Turn))
                 .after("actions")
                 .with_system(handle_evs.system()),
-        );
-        app.add_system_set(
-            SystemSet::on_update(AppState::DungeonCrawl(TurnState::Turn))
-                .with_system(update_position.system().label("positions"))
-                .with_system(camera_position.system().after("positions"))
-                .with_system(ui::update_health.system())
-                .with_system(ui::update_log.system())
-                .with_system(ui::update_cursor.system().before("positions"))
-                .with_system(ui::update_details.system())
-                .with_system(ui::update_inventory.system()),
         );
     }
 }
@@ -440,7 +443,7 @@ fn handle_evs(
 
     if any_evs {
         app_state
-            .set(AppState::DungeonCrawl(TurnState::Setup))
+            .set(AppState::DungeonCrawl(TurnState::WorldUpdate))
             .unwrap();
     }
 }

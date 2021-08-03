@@ -1,36 +1,7 @@
 use super::{EnemyAI, Initiative, Player};
-use crate::{
-    ui,
-    world_map::{BlocksMovement, BlocksVision, Grid, GridPosition, Tile, TileFlags, WorldMap},
-};
-use bevy::{prelude::*, render::camera::Camera};
+use crate::world_map::{BlocksMovement, BlocksVision, Tile, TileFlags, WorldMap};
+use bevy::prelude::*;
 use std::collections::VecDeque;
-
-pub fn update_position(
-    mut query: Query<(&mut Transform, &GridPosition), Changed<GridPosition>>,
-    grid: Res<Grid>,
-) {
-    for (mut transform, grid_position) in query.iter_mut() {
-        transform.translation.x = (grid_position.x * grid.cell_size.x) as f32;
-        transform.translation.y = (grid_position.y * grid.cell_size.y) as f32;
-    }
-}
-
-pub fn camera_position(
-    mut query: QuerySet<(
-        Query<&Transform, With<Player>>,
-        Query<&mut Transform, (With<Camera>, Without<ui::Camera>)>,
-    )>,
-) {
-    let mut position = match query.q0_mut().single_mut() {
-        Ok(position) => position.clone(),
-        Err(_) => return,
-    };
-    let mut camera = query.q1_mut().single_mut().unwrap();
-    position.translation.z = camera.translation.z;
-    position.translation.x -= 1200.0;
-    *camera = position;
-}
 
 pub fn update_world_map(
     mut world: ResMut<WorldMap>,

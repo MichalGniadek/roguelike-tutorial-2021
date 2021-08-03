@@ -1,7 +1,8 @@
-use super::{Cursor, Health, Name, Player};
+use super::{Cursor, Health, Name, Player, TurnState};
 use crate::{
-    ui,
+    my_ui,
     world_map::{Grid, GridPosition, TileFlags, WorldMap},
+    AppState,
 };
 use bevy::{
     math::vec2,
@@ -10,11 +11,54 @@ use bevy::{
 };
 use std::collections::VecDeque;
 
+pub struct DungeonCrawlUIPlugin;
+impl Plugin for DungeonCrawlUIPlugin {
+    fn build(&self, app: &mut AppBuilder) {
+        app.add_event::<LogMessage>();
+        app.add_system_set(
+            SystemSet::on_update(AppState::DungeonCrawl(TurnState::Turn))
+                .with_system(update_position.system().label("positions"))
+                .with_system(camera_position.system().after("positions"))
+                .with_system(update_health.system())
+                .with_system(update_log.system())
+                .with_system(update_cursor.system().before("positions"))
+                .with_system(update_details.system())
+                .with_system(update_inventory.system()),
+        );
+    }
+}
+
+pub fn update_position(
+    mut query: Query<(&mut Transform, &GridPosition), Changed<GridPosition>>,
+    grid: Res<Grid>,
+) {
+    for (mut transform, grid_position) in query.iter_mut() {
+        transform.translation.x = (grid_position.x * grid.cell_size.x) as f32;
+        transform.translation.y = (grid_position.y * grid.cell_size.y) as f32;
+    }
+}
+
+pub fn camera_position(
+    mut query: QuerySet<(
+        Query<&Transform, With<Player>>,
+        Query<&mut Transform, (With<Camera>, Without<my_ui::crawl::Camera>)>,
+    )>,
+) {
+    let mut position = match query.q0_mut().single_mut() {
+        Ok(position) => position.clone(),
+        Err(_) => return,
+    };
+    let mut camera = query.q1_mut().single_mut().unwrap();
+    position.translation.z = camera.translation.z;
+    position.translation.x -= 1200.0;
+    *camera = position;
+}
+
 pub struct LogMessage(pub String);
 
 pub fn update_health(
-    mut text: Query<&mut Text, With<ui::HpText>>,
-    mut bar: Query<&mut Style, With<ui::HpBar>>,
+    mut text: Query<&mut Text, With<my_ui::crawl::HpText>>,
+    mut bar: Query<&mut Style, With<my_ui::crawl::HpBar>>,
     hp: Query<&Health, With<Player>>,
 ) {
     let hp = match hp.single() {
@@ -27,7 +71,7 @@ pub fn update_health(
 }
 
 pub fn update_log(
-    mut text: Query<&mut Text, With<ui::Log>>,
+    mut text: Query<&mut Text, With<my_ui::crawl::Log>>,
     mut messages: EventReader<LogMessage>,
     mut log: Local<VecDeque<String>>,
 ) {
@@ -45,7 +89,10 @@ pub fn update_log(
 
 pub fn update_cursor(
     windows: Res<Windows>,
-    camera: Query<(&Transform, &OrthographicProjection), (With<Camera>, Without<ui::Camera>)>,
+    camera: Query<
+        (&Transform, &OrthographicProjection),
+        (With<Camera>, Without<my_ui::crawl::Camera>),
+    >,
     grid: Res<Grid>,
     player: Query<&Player>,
     mut cursor: Query<(&mut GridPosition, &mut Visible), With<Cursor>>,
@@ -72,7 +119,7 @@ pub fn update_cursor(
 }
 
 pub fn update_details(
-    mut text: Query<&mut Text, With<ui::Details>>,
+    mut text: Query<&mut Text, With<my_ui::crawl::Details>>,
     names: Query<&Name>,
     health: Query<&Health>,
     world: Res<WorldMap>,
@@ -107,7 +154,7 @@ pub fn update_details(
 }
 
 pub fn update_inventory(
-    mut text: Query<&mut Text, With<ui::Inventory>>,
+    mut text: Query<&mut Text, With<my_ui::crawl::Inventory>>,
     player: Query<&Player>,
     names: Query<&Name>,
 ) {

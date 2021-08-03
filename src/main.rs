@@ -12,8 +12,11 @@ use world_map::{Grid, GridPosition};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AppState {
+    MainMenu,
     WorldGeneration,
+    DungeonCrawlEnter,
     DungeonCrawl(TurnState),
+    DungeonCrawlExit,
 }
 
 fn main() {
@@ -57,13 +60,21 @@ fn main() {
     app.run();
 }
 
-pub mod ui {
-    pub struct Camera;
-    pub struct HpText;
-    pub struct HpBar;
-    pub struct Log;
-    pub struct Details;
-    pub struct Inventory;
+pub mod my_ui {
+    pub mod main_menu_ui {
+        pub struct Menu;
+        pub struct NewGame;
+        pub struct Load;
+        pub struct Exit;
+    }
+    pub mod crawl {
+        pub struct Camera;
+        pub struct HpText;
+        pub struct HpBar;
+        pub struct Log;
+        pub struct Details;
+        pub struct Inventory;
+    }
 }
 
 fn ui_setup(
@@ -84,7 +95,7 @@ fn ui_setup(
 
     commands
         .spawn_bundle(UiCameraBundle::default())
-        .insert(ui::Camera);
+        .insert(my_ui::crawl::Camera);
     commands
         .spawn_bundle(NodeBundle {
             style: Style {
@@ -115,7 +126,7 @@ fn ui_setup(
                     ),
                     ..Default::default()
                 })
-                .insert(ui::HpText);
+                .insert(my_ui::crawl::HpText);
 
             parent
                 .spawn_bundle(NodeBundle {
@@ -136,7 +147,7 @@ fn ui_setup(
                             material: materials.add(Color::hex("43ad39").unwrap().into()),
                             ..Default::default()
                         })
-                        .insert(ui::HpBar);
+                        .insert(my_ui::crawl::HpBar);
                 });
 
             parent.spawn_bundle(NodeBundle {
@@ -176,7 +187,7 @@ fn ui_setup(
                     ),
                     ..Default::default()
                 })
-                .insert(ui::Log);
+                .insert(my_ui::crawl::Log);
 
             parent.spawn_bundle(NodeBundle {
                 style: Style {
@@ -215,7 +226,7 @@ fn ui_setup(
                     ),
                     ..Default::default()
                 })
-                .insert(ui::Details);
+                .insert(my_ui::crawl::Details);
 
             parent.spawn_bundle(NodeBundle {
                 style: Style {
@@ -254,6 +265,6 @@ fn ui_setup(
                     ),
                     ..Default::default()
                 })
-                .insert(ui::Inventory);
+                .insert(my_ui::crawl::Inventory);
         });
 }

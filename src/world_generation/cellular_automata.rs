@@ -1,6 +1,5 @@
 use crate::{
     bundles::{EnemyBundle, ItemBundle, PlayerBundle},
-    dungeon_crawl::TurnState,
     world_map::{Array2D, GridPosition, TileFactory, WorldMap},
     AppState,
 };
@@ -98,9 +97,7 @@ fn cellular_automata(
         tiles: Array2D::with_size(MAP_SIZE + 20, MAP_SIZE + 20),
     });
 
-    app_state
-        .set(AppState::DungeonCrawl(TurnState::Setup))
-        .unwrap();
+    app_state.set(AppState::DungeonCrawlEnter).unwrap();
 }
 
 fn get_random_map() -> Array2D<TileType> {
