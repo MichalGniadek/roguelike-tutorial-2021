@@ -19,6 +19,8 @@ pub enum AppState {
     DungeonCrawlExit,
 }
 
+pub struct UiCamera;
+
 fn main() {
     // When building for WASM, print panics to the browser console
     #[cfg(target_arch = "wasm32")]
@@ -43,6 +45,10 @@ fn main() {
             let mut orto = OrthographicCameraBundle::new_2d();
             orto.orthographic_projection.scale = 8.0;
             commands.spawn_bundle(orto);
+
+            commands
+                .spawn_bundle(UiCameraBundle::default())
+                .insert(UiCamera);
         })
         .system(),
     );

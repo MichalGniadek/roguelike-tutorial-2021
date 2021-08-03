@@ -3,7 +3,7 @@ mod ui_setup;
 use super::{Cursor, Health, Name, Player, TurnState};
 use crate::{
     world_map::{Grid, GridPosition, TileFlags, WorldMap},
-    AppState,
+    AppState, UiCamera,
 };
 use bevy::{
     math::vec2,
@@ -13,7 +13,6 @@ use bevy::{
 use std::collections::VecDeque;
 
 pub struct MyCanvas;
-pub struct MyCamera;
 pub struct MyHpText;
 pub struct MyHpBar;
 pub struct MyLog;
@@ -39,6 +38,9 @@ impl Plugin for DungeonCrawlUIPlugin {
                 .with_system(update_details.system())
                 .with_system(update_inventory.system()),
         );
+        app.add_system_set(
+            SystemSet::on_enter(AppState::DungeonCrawlExit).with_system(ui_setup::cleanup.system()),
+        );
     }
 }
 
@@ -55,7 +57,7 @@ pub fn update_position(
 pub fn camera_position(
     mut query: QuerySet<(
         Query<&Transform, With<Player>>,
-        Query<&mut Transform, (With<Camera>, Without<MyCamera>)>,
+        Query<&mut Transform, (With<Camera>, Without<UiCamera>)>,
     )>,
 ) {
     let mut position = match query.q0_mut().single_mut() {
@@ -101,7 +103,7 @@ pub fn update_log(
 
 pub fn update_cursor(
     windows: Res<Windows>,
-    camera: Query<(&Transform, &OrthographicProjection), (With<Camera>, Without<MyCamera>)>,
+    camera: Query<(&Transform, &OrthographicProjection), (With<Camera>, Without<UiCamera>)>,
     grid: Res<Grid>,
     player: Query<&Player>,
     mut cursor: Query<(&mut GridPosition, &mut Visible), With<Cursor>>,

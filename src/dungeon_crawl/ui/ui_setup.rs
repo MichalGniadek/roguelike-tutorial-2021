@@ -1,5 +1,5 @@
-use super::{super::Cursor, MyCamera, MyCanvas, MyDetails, MyHpBar, MyHpText, MyInventory, MyLog};
-use crate::world_map::GridPosition;
+use super::{MyCanvas, MyDetails, MyHpBar, MyHpText, MyInventory, MyLog};
+use crate::{dungeon_crawl::Cursor, world_map::GridPosition};
 use bevy::prelude::*;
 
 pub fn create(
@@ -17,10 +17,6 @@ pub fn create(
             ..Default::default()
         })
         .insert_bundle((GridPosition { x: 10, y: 10 }, Cursor));
-
-    commands
-        .spawn_bundle(UiCameraBundle::default())
-        .insert(MyCamera);
 
     commands
         .spawn_bundle(NodeBundle {
@@ -194,4 +190,10 @@ pub fn create(
                 })
                 .insert(MyInventory);
         });
+}
+
+pub fn cleanup(q: Query<Entity, With<MyCanvas>>, mut commands: Commands) {
+    for e in q.iter() {
+        commands.entity(e).despawn_recursive();
+    }
 }
