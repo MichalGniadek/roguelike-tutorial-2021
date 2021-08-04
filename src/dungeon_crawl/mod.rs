@@ -382,7 +382,7 @@ fn handle_actions(
                 let health = &mut healthy.get_mut(*attackee).unwrap().current;
                 *health -= damage;
 
-                if *health == 0 {
+                if *health <= 0 {
                     log.send(LogMessage(format!(
                         "{} died!",
                         names.get(*attackee).unwrap().capitalized()
@@ -517,7 +517,8 @@ fn handle_evs(
 }
 
 pub fn cleanup(
-    q: Query<Entity, Or<(With<MyCanvas>, With<GridPosition>)>>,
+    // Player might have died so it has additional check
+    q: Query<Entity, Or<(With<MyCanvas>, With<GridPosition>, With<Player>)>>,
     mut commands: Commands,
     mut data: ResMut<GameData>,
     player: Query<&Health, With<Player>>,
