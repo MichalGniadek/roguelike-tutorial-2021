@@ -20,6 +20,10 @@ pub enum AppState {
     DungeonCrawlDescend,
 }
 
+#[cfg_attr(target_arch = "wasm32", global_allocator)]
+#[cfg(target_arch = "wasm32")]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
 pub struct UiCamera;
 
 fn main() {
