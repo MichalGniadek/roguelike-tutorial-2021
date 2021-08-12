@@ -18,20 +18,14 @@ pub enum TurnState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Action {
-    Wait,
+pub enum Ev {
     Move(Entity, GridPosition, GridPosition),
     Attack(Entity, Entity, i32),
     PickUpItem(Entity, Entity),
     DropItem(Entity, Entity, GridPosition),
     Heal(Entity, i32),
     Paralyze(Entity, i32),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Ev {
     RemoveFromMap(Entity),
-    Paralyze(Entity, i32),
     AddToMap(Entity, GridPosition),
     RemoveFromInitiative(Entity),
     Despawn(Entity),
@@ -46,7 +40,7 @@ pub struct InitiativeOrder(pub VecDeque<Entity>);
 pub struct DungeonCrawlPlugin;
 impl Plugin for DungeonCrawlPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app.add_event::<Action>()
+        app.add_event::<Ev>()
             .add_event::<Ev>()
             .add_plugin(ui::DungeonCrawlUIPlugin)
             .init_resource::<Logs>()
@@ -90,7 +84,7 @@ impl Plugin for DungeonCrawlPlugin {
 
         app.add_system_set(
             SystemSet::on_update(AppState::DungeonCrawl(TurnState::Turn))
-                .before("actions")
+                .before("evs")
                 .with_system(player_control.system())
                 .with_system(enemy_ai.system())
                 .with_system(paralyzed.system()),
@@ -98,13 +92,7 @@ impl Plugin for DungeonCrawlPlugin {
 
         app.add_system_set(
             SystemSet::on_update(AppState::DungeonCrawl(TurnState::Turn))
-                .label("actions")
-                .with_system(handle_actions.system()),
-        );
-
-        app.add_system_set(
-            SystemSet::on_update(AppState::DungeonCrawl(TurnState::Turn))
-                .after("actions")
+                .label("evs")
                 .with_system(handle_evs.system()),
         );
     }
@@ -179,7 +167,6 @@ fn player_control(
     keys: Res<Input<KeyCode>>,
     buttons: Res<Input<MouseButton>>,
     items: Query<(Entity, Option<&GridPosition>, &Item)>,
-    mut actions: EventWriter<Action>,
     cursor: Query<&GridPosition, With<Cursor>>,
     controllers: Query<Entity, Or<(With<Player>, With<EnemyAI>)>>,
     mut evs: EventWriter<Ev>,
@@ -202,7 +189,7 @@ fn player_control(
                 if let Some((item, _, _)) =
                     items.iter().find(|(_, item, _)| item.contains(&position))
                 {
-                    actions.send(Action::PickUpItem(player_entity, item));
+                    evs.send(Ev::PickUpItem(player_entity, item));
                 }
                 return;
             }
@@ -227,7 +214,7 @@ fn player_control(
                                 .iter()
                                 .find(|e| healthy_entities.get(**e).is_ok())
                             {
-                                actions.send(Action::Heal(*e, *amount));
+                                evs.send(Ev::Heal(*e, *amount));
                                 inventory.inventory[index] = None;
                                 inventory.selected = None;
                             }
@@ -237,7 +224,7 @@ fn player_control(
                                 .iter()
                                 .find(|e| healthy_entities.get(**e).is_ok())
                             {
-                                actions.send(Action::Attack(player_entity, *e, *damage));
+                                evs.send(Ev::Attack(player_entity, *e, *damage));
                                 inventory.inventory[index] = None;
                                 inventory.selected = None;
                             }
@@ -247,7 +234,7 @@ fn player_control(
                                 .iter()
                                 .find(|e| controllers.get(**e).is_ok())
                             {
-                                actions.send(Action::Paralyze(*e, *duration));
+                                evs.send(Ev::Paralyze(*e, *duration));
                                 inventory.inventory[index] = None;
                                 inventory.selected = None;
                             }
@@ -259,7 +246,7 @@ fn player_control(
                                         .iter()
                                         .find(|e| healthy_entities.get(**e).is_ok())
                                     {
-                                        actions.send(Action::Attack(player_entity, *e, *damage));
+                                        evs.send(Ev::Attack(player_entity, *e, *damage));
                                         inventory.inventory[index] = None;
                                         inventory.selected = None;
                                     }
@@ -268,7 +255,7 @@ fn player_control(
                         }
                     }
                 } else if buttons.just_pressed(MouseButton::Right) {
-                    actions.send(Action::DropItem(player_entity, item, cursor));
+                    evs.send(Ev::DropItem(player_entity, item, cursor));
                     inventory.inventory[index] = None;
                     inventory.selected = None;
                 }
@@ -290,11 +277,11 @@ fn player_control(
         } else if world.tiles[new_pos].contains(TileFlags::BLOCKS_MOVEMENT) {
             for &entity in &world.entities[new_pos] {
                 if let Ok(()) = healthy_entities.get(entity) {
-                    actions.send(Action::Attack(player_entity, entity, 1));
+                    evs.send(Ev::Attack(player_entity, entity, 1));
                 }
             }
         } else {
-            actions.send(Action::Move(player_entity, *position, new_pos));
+            evs.send(Ev::Move(player_entity, *position, new_pos));
         }
     }
 }
@@ -303,7 +290,7 @@ fn enemy_ai(
     enemy: Query<(Entity, &GridPosition), (With<EnemyAI>, With<Initiative>, Without<Paralyzed>)>,
     player: Query<(Entity, &GridPosition), With<Player>>,
     world: Res<WorldMap>,
-    mut actions: EventWriter<Action>,
+    mut evs: EventWriter<Ev>,
 ) {
     let (enemy, position) = match enemy.single() {
         Ok(e) => e,
@@ -315,23 +302,23 @@ fn enemy_ai(
         let (player, player_pos) = player.single().unwrap();
         if let Some((path, _)) = world.pathfind(*position, *player_pos) {
             if path[1] == *player_pos {
-                actions.send(Action::Attack(enemy, player, 1));
+                evs.send(Ev::Attack(enemy, player, 1));
             } else if !world.tiles[path[1]].contains(TileFlags::BLOCKS_MOVEMENT) {
-                actions.send(Action::Move(enemy, *position, path[1]));
+                evs.send(Ev::Move(enemy, *position, path[1]));
             } else {
-                actions.send(Action::Wait);
+                evs.send(Ev::Nothing);
             }
         } else {
-            actions.send(Action::Wait);
+            evs.send(Ev::Nothing);
         }
     } else {
-        actions.send(Action::Wait);
+        evs.send(Ev::Nothing);
     }
 }
 
 fn paralyzed(
     mut paralyzed: Query<(Entity, &mut Paralyzed), With<Initiative>>,
-    mut actions: EventWriter<Action>,
+    mut evs: EventWriter<Ev>,
     mut commands: Commands,
 ) {
     if let Ok((entity, mut paralyzed)) = paralyzed.single_mut() {
@@ -339,56 +326,66 @@ fn paralyzed(
         if paralyzed.0 == 0 {
             commands.entity(entity).remove::<Paralyzed>();
         } else {
-            actions.send(Action::Wait);
+            evs.send(Ev::Nothing);
         }
     }
 }
 
-fn handle_actions(
-    mut actions: EventReader<Action>,
+fn handle_evs(
+    mut events: EventReader<Ev>,
     mut positions: Query<&mut GridPosition>,
     mut healthy: Query<&mut Health>,
     mut world: ResMut<WorldMap>,
-    mut evs: EventWriter<Ev>,
     names: Query<&Name>,
     player: Query<(), With<Player>>,
     mut log: EventWriter<LogMessage>,
+    mut app_state: ResMut<State<AppState>>,
     mut data: ResMut<GameData>,
+    mut visible: Query<&mut Visible>,
+    mut commands: Commands,
+    mut order: ResMut<InitiativeOrder>,
 ) {
-    for a in actions.iter() {
-        match a {
-            Action::Wait => evs.send(Ev::Nothing),
-            Action::Move(entity, old_pos, new_pos) => {
-                let i = world.entities[*old_pos]
-                    .iter()
-                    .position(|x| x == entity)
-                    .unwrap();
-                world.entities[*old_pos].swap_remove(i);
-                world.entities[*new_pos].push(*entity);
+    let mut evs: VecDeque<Ev> = VecDeque::new();
+    evs.extend(events.iter());
 
-                if let Ok(mut pos) = positions.get_mut(*entity) {
-                    *pos = *new_pos;
+    let mut next_app_state = None;
+    if !evs.is_empty() {
+        next_app_state = Some(AppState::DungeonCrawl(TurnState::WorldUpdate));
+    }
+
+    while let Some(ev) = evs.pop_front() {
+        match ev {
+            Ev::Nothing => {}
+            Ev::Move(entity, old_pos, new_pos) => {
+                let i = world.entities[old_pos]
+                    .iter()
+                    .position(|x| *x == entity)
+                    .unwrap();
+                world.entities[old_pos].swap_remove(i);
+                world.entities[new_pos].push(entity);
+
+                if let Ok(mut pos) = positions.get_mut(entity) {
+                    *pos = new_pos;
                 }
-                evs.send(Ev::Nothing);
             }
-            Action::Attack(attacker, attackee, damage) => {
+            Ev::Attack(attacker, attackee, damage) => {
                 log.send(LogMessage(format!(
                     "{} attacks {}, dealing {} damage!",
-                    names.get(*attacker).unwrap().capitalized(),
-                    names.get(*attackee).unwrap().0,
+                    names.get(attacker).unwrap().capitalized(),
+                    names.get(attackee).unwrap().0,
                     damage
                 )));
 
-                let health = &mut healthy.get_mut(*attackee).unwrap().current;
+                let health = &mut healthy.get_mut(attackee).unwrap().current;
                 *health -= damage;
 
                 if *health <= 0 {
                     log.send(LogMessage(format!(
                         "{} died!",
-                        names.get(*attackee).unwrap().capitalized()
+                        names.get(attackee).unwrap().capitalized()
                     )));
 
-                    if player.get(*attacker).is_ok() {
+                    if player.get(attacker).is_ok() {
                         data.current_xp += 1;
                         if data.current_xp >= data.needed_xp {
                             log.send(LogMessage("You level up!".into()));
@@ -397,122 +394,94 @@ fn handle_actions(
                             data.needed_xp += 2;
                             data.level += 1;
 
-                            healthy.get_mut(*attacker).unwrap().max += 2;
+                            healthy.get_mut(attacker).unwrap().max += 2;
                         }
                     }
 
-                    evs.send(Ev::RemoveFromMap(*attackee));
-                    evs.send(Ev::RemoveFromInitiative(*attackee));
-                    evs.send(Ev::Despawn(*attackee));
-                } else {
-                    evs.send(Ev::Nothing);
+                    evs.push_back(Ev::RemoveFromMap(attackee));
+                    evs.push_back(Ev::RemoveFromInitiative(attackee));
+                    evs.push_back(Ev::Despawn(attackee));
                 }
             }
-            Action::PickUpItem(_, item) => {
+            Ev::PickUpItem(_, item) => {
                 for slot in &mut data.inventory {
                     if slot.is_none() {
-                        *slot = Some(*item);
+                        *slot = Some(item);
                         log.send(LogMessage(format!(
                             "You pick up {}.",
-                            names.get(*item).unwrap().0,
+                            names.get(item).unwrap().0,
                         )));
-                        evs.send(Ev::RemoveFromMap(*item));
+                        evs.push_back(Ev::RemoveFromMap(item));
                         break;
                     }
                 }
             }
-            Action::DropItem(_, item, position) => {
-                if world.tiles[*position].contains(TileFlags::BLOCKS_MOVEMENT) {
+            Ev::DropItem(_, item, position) => {
+                if world.tiles[position].contains(TileFlags::BLOCKS_MOVEMENT) {
                     log.send(LogMessage(format!(
                         "{} slams into the wall.",
-                        names.get(*item).unwrap().capitalized(),
+                        names.get(item).unwrap().capitalized(),
                     )));
-                    evs.send(Ev::Despawn(*item));
+                    evs.push_back(Ev::Despawn(item));
                 } else {
                     log.send(LogMessage(format!(
                         "{} lands on the floor.",
-                        names.get(*item).unwrap().capitalized(),
+                        names.get(item).unwrap().capitalized(),
                     )));
-                    evs.send(Ev::AddToMap(*item, *position));
+                    evs.push_back(Ev::AddToMap(item, position));
                 }
             }
-            Action::Heal(entity, amount) => {
+            Ev::Heal(entity, amount) => {
                 log.send(LogMessage(format!(
                     "{} is healed by {} health.",
-                    names.get(*entity).unwrap().capitalized(),
+                    names.get(entity).unwrap().capitalized(),
                     amount
                 )));
-                let mut hp = healthy.get_mut(*entity).unwrap();
+                let mut hp = healthy.get_mut(entity).unwrap();
                 hp.current = i32::min(hp.max, hp.current + amount);
-                evs.send(Ev::Nothing);
             }
-            Action::Paralyze(entity, duration) => evs.send(Ev::Paralyze(*entity, *duration)),
-        }
-    }
-}
-
-fn handle_evs(
-    mut evs: EventReader<Ev>,
-    mut commands: Commands,
-    mut order: ResMut<InitiativeOrder>,
-    mut positions: Query<&mut GridPosition>,
-    mut world: ResMut<WorldMap>,
-    player: Query<(), With<Player>>,
-    mut visible: Query<&mut Visible>,
-    mut app_state: ResMut<State<AppState>>,
-    mut log: EventWriter<LogMessage>,
-) {
-    let mut any_evs = false;
-    for ev in evs.iter() {
-        any_evs = true;
-        match ev {
             Ev::RemoveFromMap(entity) => {
-                let pos = positions.get_mut(*entity).unwrap();
+                let pos = positions.get_mut(entity).unwrap();
                 let i = world.entities[*pos]
                     .iter()
-                    .position(|x| x == entity)
+                    .position(|x| *x == entity)
                     .unwrap();
                 world.entities[*pos].swap_remove(i);
-                commands.entity(*entity).remove::<GridPosition>();
-                visible.get_mut(*entity).unwrap().is_visible = false;
+                commands.entity(entity).remove::<GridPosition>();
+                visible.get_mut(entity).unwrap().is_visible = false;
             }
             Ev::AddToMap(entity, position) => {
-                world.entities[*position].push(*entity);
-                commands.entity(*entity).insert(*position);
-                visible.get_mut(*entity).unwrap().is_visible = true;
+                world.entities[position].push(entity);
+                commands.entity(entity).insert(position);
+                visible.get_mut(entity).unwrap().is_visible = true;
             }
             Ev::RemoveFromInitiative(entity) => {
-                let i = order.0.iter().position(|x| x == entity).unwrap();
+                let i = order.0.iter().position(|x| *x == entity).unwrap();
                 order.0.remove(i);
-                commands.entity(*entity).remove::<Initiative>();
+                commands.entity(entity).remove::<Initiative>();
             }
             Ev::Despawn(entity) => {
-                if player.get(*entity).is_ok() {
-                    app_state.set(AppState::DungeonCrawlExitToMenu).unwrap();
-                    return;
+                if player.get(entity).is_ok() {
+                    next_app_state = Some(AppState::DungeonCrawlExitToMenu);
+                } else {
+                    commands.entity(entity).despawn();
                 }
-                commands.entity(*entity).despawn();
             }
-            Ev::Nothing => {}
             Ev::Paralyze(entity, duration) => {
-                commands.entity(*entity).insert(Paralyzed(*duration));
+                commands.entity(entity).insert(Paralyzed(duration));
             }
             Ev::Quit => {
-                app_state.set(AppState::DungeonCrawlExitToMenu).unwrap();
-                return;
+                next_app_state = Some(AppState::DungeonCrawlExitToMenu);
             }
             Ev::Descend => {
                 log.send(LogMessage("You descend to the next dungeon floor".into()));
-                app_state.set(AppState::DungeonCrawlDescend).unwrap();
-                return;
+                next_app_state = Some(AppState::DungeonCrawlDescend);
             }
         }
     }
 
-    if any_evs {
-        app_state
-            .set(AppState::DungeonCrawl(TurnState::WorldUpdate))
-            .unwrap();
+    if let Some(state) = next_app_state {
+        app_state.set(state).unwrap();
     }
 }
 
