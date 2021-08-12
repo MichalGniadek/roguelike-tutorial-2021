@@ -3,8 +3,6 @@ name = "bevy_roguelike"
 version = "0.1.0"
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [features]
 default = [
   "bevy/bevy_gltf",
@@ -32,3 +30,6 @@ rand = "0.8.0"
 getrandom = { version = "0.2"}
 console_error_panic_hook = {version="0.1", optional = true}
 pathfinding = "2.1.6"
+
+[profile.release]
+lto = "thin"
