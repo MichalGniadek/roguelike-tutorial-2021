@@ -29,7 +29,7 @@ pub struct Logs(VecDeque<String>);
 pub struct DungeonCrawlUIPlugin;
 impl Plugin for DungeonCrawlUIPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app.add_event::<LogMessage>();
+        app.add_event::<LogMessage>().init_resource::<Logs>();
         app.add_system_set(
             SystemSet::on_enter(AppState::DungeonCrawlEnter).with_system(ui_setup::create.system()),
         );

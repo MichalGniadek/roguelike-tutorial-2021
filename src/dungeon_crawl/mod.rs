@@ -9,7 +9,8 @@ use crate::{
     AppState,
 };
 use bevy::{ecs::system::QuerySingleError, prelude::*};
-use std::collections::VecDeque;
+use rand::random;
+use std::collections::{HashMap, VecDeque};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TurnState {
@@ -41,9 +42,7 @@ pub struct DungeonCrawlPlugin;
 impl Plugin for DungeonCrawlPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.add_event::<Ev>()
-            .add_event::<Ev>()
             .add_plugin(ui::DungeonCrawlUIPlugin)
-            .init_resource::<Logs>()
             .init_resource::<GameData>()
             .init_resource::<InitiativeOrder>();
 
@@ -110,6 +109,60 @@ pub struct GameData {
     pub needed_xp: u32,
 }
 
+impl GameData {
+    const MAP_SIZE: [(u32, (u32, u32)); 2] = [(1, (200, 400)), (4, (400, 600))];
+
+    const ENEMY_COUNT: [(u32, u32); 3] = [(1, 3), (2, 4), (4, 6)];
+    const ITEM_COUNT: [(u32, u32); 3] = [(1, 2), (2, 3), (4, 4)];
+
+    const ITEM_CHANCES: [(u32, (Item, i32)); 4] = [
+        (1, (Item::HealthPotion, 10)),
+        (2, (Item::ScrollOfLightning, 5)),
+        (4, (Item::ScrollOfFireball, 5)),
+        (4, (Item::ScrollOfParalysis, 5)),
+    ];
+
+    pub fn floor_map_size(&self) -> (u32, u32) {
+        self.calculate_count(Self::MAP_SIZE)
+    }
+
+    pub fn floor_enemy_count(&self) -> u32 {
+        self.calculate_count(Self::ENEMY_COUNT)
+    }
+
+    pub fn floor_item_count(&self) -> u32 {
+        self.calculate_count(Self::ITEM_COUNT)
+    }
+
+    pub fn floor_item(&self) -> Item {
+        let mut map = HashMap::new();
+        for (floor, (item, chance)) in Self::ITEM_CHANCES {
+            if floor > self.floor {
+                break;
+            }
+            map.insert(item, chance);
+        }
+
+        let sum: i32 = map.values().sum();
+        let mut rand = 1 + random::<i32>() % sum;
+
+        for (item, chance) in map {
+            rand -= chance;
+            if rand <= 0 {
+                return item;
+            }
+        }
+        unreachable!()
+    }
+
+    fn calculate_count<T: Copy, const N: usize>(&self, arr: [(u32, T); N]) -> T {
+        arr.iter()
+            .find(|(floor, _)| *floor < self.floor + 1)
+            .unwrap()
+            .1
+    }
+}
+
 impl Default for GameData {
     fn default() -> Self {
         Self {
@@ -130,11 +183,12 @@ pub struct Player;
 pub struct EnemyAI;
 pub struct Initiative;
 pub struct Name(pub String);
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum Item {
-    HealthPotion(i32),
-    ScrollOfLightning(i32),
-    ScrollOfParalysis(i32),
-    ScrollOfFireball(i32),
+    HealthPotion,
+    ScrollOfLightning,
+    ScrollOfParalysis,
+    ScrollOfFireball,
 }
 pub struct Paralyzed(i32);
 pub struct Cursor;
@@ -209,44 +263,44 @@ fn player_control(
             if let Some(item) = inventory.inventory[index] {
                 if buttons.just_pressed(MouseButton::Left) {
                     match items.get(item).unwrap().2 {
-                        Item::HealthPotion(amount) => {
+                        Item::HealthPotion => {
                             if let Some(e) = world.entities[cursor]
                                 .iter()
                                 .find(|e| healthy_entities.get(**e).is_ok())
                             {
-                                evs.send(Ev::Heal(*e, *amount));
+                                evs.send(Ev::Heal(*e, 4));
                                 inventory.inventory[index] = None;
                                 inventory.selected = None;
                             }
                         }
-                        Item::ScrollOfLightning(damage) => {
+                        Item::ScrollOfLightning => {
                             if let Some(e) = world.entities[cursor]
                                 .iter()
                                 .find(|e| healthy_entities.get(**e).is_ok())
                             {
-                                evs.send(Ev::Attack(player_entity, *e, *damage));
+                                evs.send(Ev::Attack(player_entity, *e, 2));
                                 inventory.inventory[index] = None;
                                 inventory.selected = None;
                             }
                         }
-                        Item::ScrollOfParalysis(duration) => {
+                        Item::ScrollOfParalysis => {
                             if let Some(e) = world.entities[cursor]
                                 .iter()
                                 .find(|e| controllers.get(**e).is_ok())
                             {
-                                evs.send(Ev::Paralyze(*e, *duration));
+                                evs.send(Ev::Paralyze(*e, 4));
                                 inventory.inventory[index] = None;
                                 inventory.selected = None;
                             }
                         }
-                        Item::ScrollOfFireball(damage) => {
+                        Item::ScrollOfFireball => {
                             for x in -1..=1 {
                                 for y in -1..=1 {
                                     if let Some(e) = world.entities[[cursor.x + x, cursor.y + y]]
                                         .iter()
                                         .find(|e| healthy_entities.get(**e).is_ok())
                                     {
-                                        evs.send(Ev::Attack(player_entity, *e, *damage));
+                                        evs.send(Ev::Attack(player_entity, *e, 1));
                                         inventory.inventory[index] = None;
                                         inventory.selected = None;
                                     }

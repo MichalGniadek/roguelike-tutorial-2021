@@ -73,6 +73,19 @@ pub struct ItemBundle {
 }
 
 impl ItemBundle {
+    pub fn item(
+        item: Item,
+        asset_server: &AssetServer,
+        materials: &mut ResMut<Assets<ColorMaterial>>,
+    ) -> Self {
+        match item {
+            Item::HealthPotion => Self::health_potion(asset_server, materials),
+            Item::ScrollOfLightning => Self::scroll_of_lightning(asset_server, materials),
+            Item::ScrollOfParalysis => Self::scroll_of_paralysis(asset_server, materials),
+            Item::ScrollOfFireball => Self::scroll_of_fireball(asset_server, materials),
+        }
+    }
+
     pub fn health_potion(
         asset_server: &AssetServer,
         materials: &mut ResMut<Assets<ColorMaterial>>,
@@ -86,7 +99,7 @@ impl ItemBundle {
                 transform: Transform::from_xyz(0.0, 0.0, 1.0),
                 ..Default::default()
             },
-            item: Item::HealthPotion(4),
+            item: Item::HealthPotion,
             name: Name(String::from("health potion")),
         }
     }
@@ -104,7 +117,7 @@ impl ItemBundle {
                 transform: Transform::from_xyz(0.0, 0.0, 1.0),
                 ..Default::default()
             },
-            item: Item::ScrollOfLightning(2),
+            item: Item::ScrollOfLightning,
             name: Name(String::from("scroll of lightning")),
         }
     }
@@ -122,7 +135,7 @@ impl ItemBundle {
                 transform: Transform::from_xyz(0.0, 0.0, 1.0),
                 ..Default::default()
             },
-            item: Item::ScrollOfParalysis(4),
+            item: Item::ScrollOfParalysis,
             name: Name(String::from("scroll of paralysis")),
         }
     }
@@ -140,7 +153,7 @@ impl ItemBundle {
                 transform: Transform::from_xyz(0.0, 0.0, 1.0),
                 ..Default::default()
             },
-            item: Item::ScrollOfFireball(1),
+            item: Item::ScrollOfFireball,
             name: Name(String::from("scroll of fireball")),
         }
     }

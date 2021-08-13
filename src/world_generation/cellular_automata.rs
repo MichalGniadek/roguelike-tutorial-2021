@@ -5,7 +5,7 @@ use crate::{
     AppState,
 };
 use bevy::prelude::*;
-use rand::{prelude::SliceRandom, random, thread_rng};
+use rand::random;
 use std::{collections::VecDeque, mem};
 
 pub struct CellularAutomataPlugin;
@@ -34,12 +34,13 @@ fn cellular_automata(
     mut app_state: ResMut<State<AppState>>,
     data: Res<GameData>,
 ) {
+    let target_size = data.floor_map_size();
     let (tile_map, mut zone_entities) = loop {
         let mut tile_map = get_random_map();
         cellular_automata_steps(&mut tile_map, ITERATIONS);
 
         let size = select_largest_cave(&mut tile_map);
-        if size < 400 || size > 600 {
+        if size < target_size.0 || size > target_size.1 {
             continue;
         }
 
@@ -280,70 +281,31 @@ fn get_zone_entities(
     data: &GameData,
     zone_count: usize,
 ) -> Vec<Vec<Entity>> {
-    let mut zone_entities = vec![
-        vec![
-            commands
-                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(ItemBundle::health_potion(asset_server, materials))
-                .id(),
-        ],
-        vec![
-            commands
-                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
-                .id(),
-        ],
-        vec![
-            commands
-                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(ItemBundle::health_potion(asset_server, materials))
-                .id(),
-        ],
-        vec![
-            commands
-                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
-                .id(),
-        ],
-    ];
-
-    assert!(zone_entities.len() < zone_count);
-    zone_entities.resize(zone_count - 1, vec![]);
-    zone_entities.shuffle(&mut thread_rng());
-    zone_entities.insert(
-        0,
-        vec![
-            commands
-                .spawn_bundle(PlayerBundle::new(asset_server, materials, data))
-                .id(),
-            commands
-                .spawn_bundle(ItemBundle::health_potion(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(ItemBundle::scroll_of_paralysis(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(ItemBundle::scroll_of_lightning(asset_server, materials))
-                .id(),
-            commands
-                .spawn_bundle(ItemBundle::scroll_of_fireball(asset_server, materials))
-                .id(),
-        ],
+    let mut entities = vec![vec![]; zone_count];
+    entities[0].push(
+        commands
+            .spawn_bundle(PlayerBundle::new(asset_server, materials, data))
+            .id(),
     );
 
-    zone_entities
+    for _ in 0..data.floor_enemy_count() {
+        let zone = (random::<usize>() % (zone_count - 1)) + 1;
+        entities[zone].push(
+            commands
+                .spawn_bundle(EnemyBundle::orc(asset_server, materials))
+                .id(),
+        );
+    }
+
+    for _ in 0..data.floor_item_count() {
+        let zone = random::<usize>() % (zone_count - 1) + 1;
+        let item = data.floor_item();
+        entities[zone].push(
+            commands
+                .spawn_bundle(ItemBundle::item(item, asset_server, materials))
+                .id(),
+        );
+    }
+
+    entities
 }
