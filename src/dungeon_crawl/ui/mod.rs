@@ -194,13 +194,24 @@ pub fn update_inventory(
     let mut inv = vec![];
     for (i, e) in inventory.inventory.iter().enumerate() {
         inv.push(format!(
-            "{} {}",
+            "{} {} {}",
             if i == ind {
                 String::from(">>> ")
             } else {
                 format!("[{}] ", i + 1)
             },
-            e.map_or(String::from(""), |e| names.get(e).unwrap().capitalized())
+            e.map_or(String::from(""), |e| names.get(e).unwrap().capitalized()),
+            if let Some(item) = *e {
+                if inventory.armor == Some(item) {
+                    "(equiped)"
+                } else if inventory.weapon == Some(item) {
+                    "(equiped)"
+                } else {
+                    ""
+                }
+            } else {
+                ""
+            }
         ));
     }
 

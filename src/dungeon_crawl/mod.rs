@@ -100,6 +100,8 @@ impl Plugin for DungeonCrawlPlugin {
 pub struct GameData {
     pub inventory: [Option<Entity>; 5],
     pub selected: Option<usize>,
+    pub armor: Option<Entity>,
+    pub weapon: Option<Entity>,
 
     pub previous_hp: Option<Health>,
     pub floor: u32,
@@ -115,11 +117,14 @@ impl GameData {
     const ENEMY_COUNT: [(u32, u32); 3] = [(1, 3), (2, 4), (4, 6)];
     const ITEM_COUNT: [(u32, u32); 3] = [(1, 2), (2, 3), (4, 4)];
 
-    const ITEM_CHANCES: [(u32, (Item, i32)); 4] = [
+    const ITEM_CHANCES: [(u32, (Item, i32)); 7] = [
         (1, (Item::HealthPotion, 10)),
+        (2, (Item::Sword, 5)),
         (2, (Item::ScrollOfLightning, 5)),
+        (3, (Item::Armor, 5)),
         (4, (Item::ScrollOfFireball, 5)),
         (4, (Item::ScrollOfParalysis, 5)),
+        (4, (Item::WarAxe, 5)),
     ];
 
     pub fn floor_map_size(&self) -> (u32, u32) {
@@ -168,6 +173,8 @@ impl Default for GameData {
         Self {
             inventory: [None; 5],
             selected: None,
+            armor: None,
+            weapon: None,
 
             previous_hp: None,
             floor: 1,
@@ -189,6 +196,9 @@ pub enum Item {
     ScrollOfLightning,
     ScrollOfParalysis,
     ScrollOfFireball,
+    Sword,
+    WarAxe,
+    Armor,
 }
 pub struct Paralyzed(i32);
 pub struct Cursor;
@@ -214,7 +224,10 @@ impl Health {
 }
 
 fn player_control(
-    mut query: Query<(Entity, &GridPosition), (With<Initiative>, Without<Paralyzed>, With<Player>)>,
+    mut player_q: Query<
+        (Entity, &GridPosition),
+        (With<Initiative>, Without<Paralyzed>, With<Player>),
+    >,
     healthy_entities: Query<(), With<Health>>,
     mut inventory: ResMut<GameData>,
     world: Res<WorldMap>,
@@ -225,7 +238,7 @@ fn player_control(
     controllers: Query<Entity, Or<(With<Player>, With<EnemyAI>)>>,
     mut evs: EventWriter<Ev>,
 ) {
-    let (player_entity, position) = match query.single_mut() {
+    let (player_entity, position) = match player_q.single_mut() {
         Ok((e, pos)) => (e, pos),
         Err(QuerySingleError::NoEntities(_)) => return,
         Err(QuerySingleError::MultipleEntities(_)) => panic!(),
@@ -307,9 +320,32 @@ fn player_control(
                                 }
                             }
                         }
+                        Item::Sword => {
+                            if world.entities[cursor].contains(&player_entity) {
+                                inventory.weapon = Some(item);
+                                inventory.selected = None;
+                            }
+                        }
+                        Item::WarAxe => {
+                            if world.entities[cursor].contains(&player_entity) {
+                                inventory.weapon = Some(item);
+                                inventory.selected = None;
+                            }
+                        }
+                        Item::Armor => {
+                            if world.entities[cursor].contains(&player_entity) {
+                                inventory.armor = Some(item);
+                                inventory.selected = None;
+                            }
+                        }
                     }
                 } else if buttons.just_pressed(MouseButton::Right) {
                     evs.send(Ev::DropItem(player_entity, item, cursor));
+                    if inventory.armor == inventory.inventory[index] {
+                        inventory.armor = None;
+                    } else if inventory.weapon == inventory.inventory[index] {
+                        inventory.weapon = None;
+                    }
                     inventory.inventory[index] = None;
                     inventory.selected = None;
                 }
@@ -331,7 +367,12 @@ fn player_control(
         } else if world.tiles[new_pos].contains(TileFlags::BLOCKS_MOVEMENT) {
             for &entity in &world.entities[new_pos] {
                 if let Ok(()) = healthy_entities.get(entity) {
-                    evs.send(Ev::Attack(player_entity, entity, 1));
+                    let damage = match inventory.weapon.map(|item| items.get(item).unwrap().2) {
+                        Some(Item::WarAxe) => 3,
+                        Some(Item::Sword) => 2,
+                        _ => 1,
+                    };
+                    evs.send(Ev::Attack(player_entity, entity, damage));
                 }
             }
         } else {
@@ -344,6 +385,7 @@ fn enemy_ai(
     enemy: Query<(Entity, &GridPosition), (With<EnemyAI>, With<Initiative>, Without<Paralyzed>)>,
     player: Query<(Entity, &GridPosition), With<Player>>,
     world: Res<WorldMap>,
+    inventory: Res<GameData>,
     mut evs: EventWriter<Ev>,
 ) {
     let (enemy, position) = match enemy.single() {
@@ -356,7 +398,8 @@ fn enemy_ai(
         let (player, player_pos) = player.single().unwrap();
         if let Some((path, _)) = world.pathfind(*position, *player_pos) {
             if path[1] == *player_pos {
-                evs.send(Ev::Attack(enemy, player, 1));
+                let damage = if inventory.armor.is_some() { 1 } else { 2 };
+                evs.send(Ev::Attack(enemy, player, damage));
             } else if !world.tiles[path[1]].contains(TileFlags::BLOCKS_MOVEMENT) {
                 evs.send(Ev::Move(enemy, *position, path[1]));
             } else {

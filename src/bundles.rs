@@ -83,6 +83,9 @@ impl ItemBundle {
             Item::ScrollOfLightning => Self::scroll_of_lightning(asset_server, materials),
             Item::ScrollOfParalysis => Self::scroll_of_paralysis(asset_server, materials),
             Item::ScrollOfFireball => Self::scroll_of_fireball(asset_server, materials),
+            Item::Sword => Self::sword(asset_server, materials),
+            Item::WarAxe => Self::war_axe(asset_server, materials),
+            Item::Armor => Self::armor(asset_server, materials),
         }
     }
 
@@ -155,6 +158,60 @@ impl ItemBundle {
             },
             item: Item::ScrollOfFireball,
             name: Name(String::from("scroll of fireball")),
+        }
+    }
+
+    pub fn war_axe(
+        asset_server: &AssetServer,
+        materials: &mut ResMut<Assets<ColorMaterial>>,
+    ) -> Self {
+        Self {
+            sprite: SpriteBundle {
+                material: materials.add(ColorMaterial {
+                    texture: Some(asset_server.load("battle-axe.png")),
+                    color: Color::hex("EDEDED").unwrap(),
+                }),
+                transform: Transform::from_xyz(0.0, 0.0, 1.0),
+                ..Default::default()
+            },
+            item: Item::WarAxe,
+            name: Name(String::from("war axe")),
+        }
+    }
+
+    pub fn sword(
+        asset_server: &AssetServer,
+        materials: &mut ResMut<Assets<ColorMaterial>>,
+    ) -> Self {
+        Self {
+            sprite: SpriteBundle {
+                material: materials.add(ColorMaterial {
+                    texture: Some(asset_server.load("gladius.png")),
+                    color: Color::hex("EDEDED").unwrap(),
+                }),
+                transform: Transform::from_xyz(0.0, 0.0, 1.0),
+                ..Default::default()
+            },
+            item: Item::Sword,
+            name: Name(String::from("sword")),
+        }
+    }
+
+    pub fn armor(
+        asset_server: &AssetServer,
+        materials: &mut ResMut<Assets<ColorMaterial>>,
+    ) -> Self {
+        Self {
+            sprite: SpriteBundle {
+                material: materials.add(ColorMaterial {
+                    texture: Some(asset_server.load("breastplate.png")),
+                    color: Color::hex("EDEDED").unwrap(),
+                }),
+                transform: Transform::from_xyz(0.0, 0.0, 1.0),
+                ..Default::default()
+            },
+            item: Item::Armor,
+            name: Name(String::from("armor")),
         }
     }
 }
