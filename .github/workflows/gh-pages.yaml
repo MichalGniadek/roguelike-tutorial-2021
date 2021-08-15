@@ -26,9 +26,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: make
-          args: 
-            - build-web
-            - "-p release"
+          args: "build-web -p release"
          
       - name: Create pages directory
         run: mkdir pages
